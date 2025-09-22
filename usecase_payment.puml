@@ -1,0 +1,16 @@
+@startuml Payment Module
+!theme plain
+title "THANH TOÁN (PAYMENT)"
+
+actor User
+actor System as "Supabase"
+
+rectangle "Payment" {
+    usecase "Yêu cầu thanh toán" as PaymentRequest
+}
+
+User --> PaymentRequest
+
+System --> PaymentRequest : process request
+
+@enduml

@@ -1,0 +1,42 @@
+@startuml E-Wallet System
+!theme plain
+
+title
+<size:20><b>HỆ THỐNG VÍ ĐIỆN TỬ</b></size>
+<size:14>Use Case Diagram</size>
+end title
+
+actor User
+actor Admin
+actor "Supabase" as System
+actor "Email Service" as Email
+
+rectangle "E-WALLET SYSTEM" {
+    usecase "1. Đăng ký/Đăng nhập" as Auth
+    usecase "2. Quản lý Profile" as Profile
+    usecase "3. Quản lý Ví" as Wallet
+    usecase "4. Thanh toán" as Payment
+    usecase "5. Quản trị hệ thống" as AdminOps
+}
+
+' User connections
+User --> Auth
+User --> Profile
+User --> Wallet
+User --> Payment
+
+' Admin connections
+Admin --> AdminOps
+
+' System processing
+System --> Auth : Xác thực
+System --> Profile : Lưu trữ
+System --> Wallet : Xử lý
+System --> Payment : Giao dịch
+System --> AdminOps : Quản lý
+
+' Email notifications
+Email --> Auth : OTP
+Email --> Wallet : Xác nhận
+
+@enduml

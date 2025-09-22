@@ -1,0 +1,32 @@
+@startuml Wallet Module Use Case
+!theme plain
+title "MODULE VÍ ĐIỆN TỬ (WALLET)"
+
+left to right direction
+
+actor "User" as User
+actor "Supabase System" as Supabase
+actor "Email Service" as EmailService
+
+rectangle "Wallet Module" {
+    usecase "Tạo ví" as CreateWallet
+    usecase "Xem ví" as ViewWallet
+    usecase "Chuyển tiền" as Transfer
+    usecase "Lịch sử" as History
+}
+
+User --> CreateWallet
+User --> ViewWallet
+User --> Transfer
+User --> History
+
+Supabase --> CreateWallet : generate ID & store
+Supabase --> ViewWallet : display balance
+Supabase --> Transfer : process transaction
+Supabase --> History : retrieve records
+
+EmailService --> Transfer : send OTP
+
+Transfer ..> EmailService : <<include>>
+
+@enduml
