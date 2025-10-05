@@ -3,6 +3,7 @@ import 'package:e_wallet/pages/screens/admin/screens/admin_dashboard_screen.dart
 import 'package:e_wallet/pages/screens/auth/screens/login_screen.dart';
 import 'package:e_wallet/pages/screens/e-wallet_layout/e-wallet_layout_screen.dart';
 import 'package:e_wallet/pages/screens/home/screens/home_screen.dart';
+import 'package:e_wallet/pages/screens/profile/screens/digital_otp_pin_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../styles/constrant.dart';
 import 'package:flutter/material.dart';
@@ -12,6 +13,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'config/supabase_config.dart';
 import 'controllers/auth_controller.dart';
+import 'controllers/digital_otp_controller.dart';
 import 'services/token_service.dart';
 
 void main() async {
@@ -35,6 +37,7 @@ class _MyAppState extends State<MyApp> {
   bool? _isFirstOpen;
   bool? _isAuthenticated;
   final AuthController _authController = Get.put(AuthController());
+  final DigitalOtpController _digitalOtpController = Get.put(DigitalOtpController());
 
   @override
   void initState() {
@@ -192,6 +195,11 @@ class _MyAppState extends State<MyApp> {
         GetPage(
           name: '/home',
           page: () => E_WalletLayoutScreen(),
+        ),
+        // Digital OTP PIN management screen
+        GetPage(
+          name: '/digital-otp-pin',
+          page: () => DigitalOtpPinScreen(),
         ),
       ],
     );

@@ -3,6 +3,7 @@ import 'package:e_wallet/pages/screens/profile/screens/edit_profile_screen.dart'
 import 'package:e_wallet/pages/screens/profile/screens/my_account_screen.dart';
 import 'package:e_wallet/pages/screens/profile/screens/my_cards_screen.dart';
 import 'package:e_wallet/pages/screens/profile/screens/settings_screen.dart';
+import 'package:e_wallet/pages/screens/profile/screens/digital_otp_pin_screen.dart';
 import 'package:e_wallet/pages/screens/wallet/wallet_screen.dart';
 import 'package:e_wallet/pages/widgets/user_image.dart';
 import 'package:e_wallet/controllers/auth_controller.dart';
@@ -210,6 +211,13 @@ class ProfileScreen extends StatelessWidget {
                         ),
                       );
                     }),
+                  ),
+                  SizedBox(height: 20),
+                  BuildProfileItem(
+                    context: context,
+                    iconPath: "assets/images/settings_icon.png",
+                    title: "Digital OTP PIN",
+                    onTap: () => Get.toNamed('/digital-otp-pin'),
                   ),
                   SizedBox(height: 20),
                   BuildProfileItem(
