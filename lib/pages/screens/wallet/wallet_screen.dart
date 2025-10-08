@@ -6,6 +6,9 @@ import 'package:e_wallet/styles/size_config.dart';
 import 'package:e_wallet/pages/widgets/custom_elevated_button.dart';
 import 'transfer_money_screen.dart';
 import 'transaction_history_screen.dart';
+import 'package:e_wallet/pages/screens/qr/qr_scan_screen.dart';
+import 'package:e_wallet/controllers/e-wallet_layout_controller.dart';
+import 'package:e_wallet/pages/screens/e-wallet_layout/e-wallet_layout_screen.dart';
 
 class WalletScreen extends StatefulWidget {
   const WalletScreen({Key? key}) : super(key: key);
@@ -202,7 +205,7 @@ class _WalletScreenState extends State<WalletScreen> {
                 icon: Icons.qr_code_scanner,
                 title: 'Quét QR',
                 color: Colors.orange,
-                onTap: () => _showDevelopmentMessage('Quét QR'),
+                onTap: () => Get.to(() => QRScanScreen()),
               ),
             ),
             const SizedBox(width: 12),
@@ -211,7 +214,10 @@ class _WalletScreenState extends State<WalletScreen> {
                 icon: Icons.history,
                 title: 'Lịch sử',
                 color: Colors.purple,
-                onTap: () => Get.to(() => TransactionHistoryScreen()),
+                onTap: () {
+                  E_WalletLayoutController.changeIndex(1);
+                  Get.offAll(() => const E_WalletLayoutScreen());
+                },
               ),
             ),
           ],

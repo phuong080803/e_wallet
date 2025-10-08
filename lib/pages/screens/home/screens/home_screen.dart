@@ -13,6 +13,11 @@ import '../../../../controllers/verification_controller.dart';
 import '../../../../controllers/wallet_controller.dart';
 import '../../../widgets/custom_elevated_button.dart';
 import '../../wallet/wallet_screen.dart';
+import '../../wallet/transaction_history_screen.dart';
+import '../../qr/qr_scan_screen.dart';
+import '../../../../controllers/e-wallet_layout_controller.dart';
+import '../../e-wallet_layout/e-wallet_layout_screen.dart';
+import '../../../../controllers/market_controller.dart';
 
 class HomeScreen extends StatelessWidget {
   HomeScreen({Key? key}) : super(key: key);
@@ -22,6 +27,7 @@ class HomeScreen extends StatelessWidget {
     // Initialize controllers with Get.put to ensure they are created
     final _verificationController = Get.put(VerificationController());
     final _walletController = Get.put(WalletController());
+    final _marketController = Get.put(MarketController());
     
     // Balance visibility state
     final RxBool _isBalanceVisible = false.obs;
@@ -46,7 +52,13 @@ class HomeScreen extends StatelessWidget {
     ];
 
     return Scaffold(
-      body: SingleChildScrollView(
+      body: RefreshIndicator(
+        onRefresh: () async {
+          await _walletController.loadUserWallet();
+          await _marketController.fetchAll(force: true);
+        },
+        child: SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
         child: Column(
           children: [
             // Header Section with Balance
@@ -244,14 +256,17 @@ class HomeScreen extends StatelessWidget {
                             icon: Icons.qr_code_scanner,
                             label: "Quét QR",
                             color: Colors.purple,
-                            onTap: () => Get.to(() => WalletScreen()),
+                            onTap: () => Get.to(() => QRScanScreen()),
                           ),
                           _buildQuickActionButton(
                             context,
                             icon: Icons.history,
                             label: "Lịch sử",
                             color: Colors.orange,
-                            onTap: () => Get.to(() => WalletScreen()),
+                            onTap: () {
+                              E_WalletLayoutController.changeIndex(1);
+                              Get.offAll(() => E_WalletLayoutScreen());
+                            },
                           ),
                         ],
                       ),
@@ -479,7 +494,7 @@ class HomeScreen extends StatelessWidget {
               ),
             ),
 
-            // Market Rates Section
+            // Market Dynamic Section
             Container(
               margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
               child: Column(
@@ -492,99 +507,24 @@ class HomeScreen extends StatelessWidget {
                       fontWeight: FontWeight.bold,
                     ),
                   ),
-                  SizedBox(height: 15),
-                  
-                  // Crypto Rates
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: Colors.grey.withOpacity(0.2)),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.grey.withOpacity(0.1),
-                          spreadRadius: 1,
-                          blurRadius: 3,
-                          offset: Offset(0, 1),
-                        ),
-                      ],
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            Icon(Icons.currency_bitcoin, color: Colors.orange, size: 20),
-                            SizedBox(width: 8),
-                            Text(
-                              'Tiền điện tử',
-                              style: Theme.of(context).textTheme.titleSmall!.copyWith(
-                                fontWeight: FontWeight.bold,
-                                color: Colors.orange,
-                              ),
-                            ),
-                          ],
-                        ),
-                        SizedBox(height: 12),
-                        ...cryptoRates.map((crypto) => _buildRateItem(
-                          context,
-                          name: crypto['name'] as String,
-                          symbol: crypto['symbol'] as String,
-                          price: crypto['price'] as String,
-                          change: crypto['change'] as String,
-                          isPositive: crypto['isPositive'] as bool,
-                        )).toList(),
-                      ],
-                    ),
-                  ),
-                  
-                  SizedBox(height: 15),
-                  
-                  // Forex Rates
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: Colors.grey.withOpacity(0.2)),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.grey.withOpacity(0.1),
-                          spreadRadius: 1,
-                          blurRadius: 3,
-                          offset: Offset(0, 1),
-                        ),
-                      ],
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            Icon(Icons.attach_money, color: Colors.green, size: 20),
-                            SizedBox(width: 8),
-                            Text(
-                              'Tỷ giá ngoại tệ',
-                              style: Theme.of(context).textTheme.titleSmall!.copyWith(
-                                fontWeight: FontWeight.bold,
-                                color: Colors.green,
-                              ),
-                            ),
-                          ],
-                        ),
-                        SizedBox(height: 12),
-                        ...forexRates.map((forex) => _buildRateItem(
-                          context,
-                          name: forex['name'] as String,
-                          symbol: '',
-                          price: forex['rate'] as String,
-                          change: forex['change'] as String,
-                          isPositive: forex['isPositive'] as bool,
-                        )).toList(),
-                      ],
-                    ),
-                  ),
+                  const SizedBox(height: 10),
+                  // Ticker
+                  Obx(() {
+                    if (_marketController.isLoading.value && _marketController.crypto.isEmpty) {
+                      return Container(
+                        height: 38,
+                        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(8)),
+                        alignment: Alignment.center,
+                        child: Text('Đang tải thị trường...'),
+                      );
+                    }
+                    return _buildMarketTicker(context, _marketController);
+                  }),
+                  const SizedBox(height: 12),
+                  // Summary Cards
+                  Obx(() {
+                    return _buildMarketSummary(context, _marketController);
+                  }),
                 ],
               ),
             ),
@@ -593,8 +533,9 @@ class HomeScreen extends StatelessWidget {
           ],
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 
   Widget _buildQuickActionButton(
     BuildContext context, {
@@ -636,6 +577,133 @@ class HomeScreen extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildMarketTicker(BuildContext context, MarketController mc) {
+    final items = mc.crypto;
+    if (items.isEmpty) {
+      return Container(
+        height: 38,
+        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(8)),
+        alignment: Alignment.center,
+        child: Text('Không có dữ liệu thị trường'),
+      );
+    }
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.grey.withOpacity(0.2)),
+      ),
+      height: 48,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        itemBuilder: (context, index) {
+          final it = items[index];
+          final name = (it['name'] ?? '').toString();
+          final price = (it['current_price'] ?? '').toString();
+          final change = (it['price_change_percentage_24h'] ?? 0).toDouble();
+          final positive = change >= 0;
+          return Row(
+            children: [
+              Text(name, style: TextStyle(fontWeight: FontWeight.w600)),
+              const SizedBox(width: 6),
+              Text(
+                price,
+                style: TextStyle(color: Colors.black87),
+              ),
+              const SizedBox(width: 6),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: positive ? Colors.green.withOpacity(0.1) : Colors.red.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Text(
+                  '${change.toStringAsFixed(2)}%',
+                  style: TextStyle(color: positive ? Colors.green : Colors.red, fontSize: 12, fontWeight: FontWeight.w600),
+                ),
+              ),
+            ],
+          );
+        },
+        separatorBuilder: (_, __) => const SizedBox(width: 16),
+        itemCount: items.length,
+      ),
+    );
+  }
+
+  Widget _buildMarketSummary(BuildContext context, MarketController mc) {
+    final crypto = mc.crypto;
+    final forex = mc.forex;
+    return Row(
+      children: [
+        Expanded(
+          child: Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.grey.withOpacity(0.2)),
+              boxShadow: [
+                BoxShadow(color: Colors.grey.withOpacity(0.1), blurRadius: 3, offset: const Offset(0,1)),
+              ],
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(children: const [Icon(Icons.currency_bitcoin, color: Colors.orange, size: 20), SizedBox(width: 6), Text('Crypto', style: TextStyle(fontWeight: FontWeight.bold))]),
+                const SizedBox(height: 8),
+                if (crypto.isEmpty) Text('—') else ...crypto.take(2).map((it) {
+                  final name = (it['symbol'] ?? '').toString().toUpperCase();
+                  final price = (it['current_price'] ?? '').toString();
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 4),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [Text(name), Text(price, style: const TextStyle(fontWeight: FontWeight.w600))],
+                    ),
+                  );
+                }).toList(),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.grey.withOpacity(0.2)),
+              boxShadow: [
+                BoxShadow(color: Colors.grey.withOpacity(0.1), blurRadius: 3, offset: const Offset(0,1)),
+              ],
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(children: const [Icon(Icons.attach_money, color: Colors.green, size: 20), SizedBox(width: 6), Text('Forex', style: TextStyle(fontWeight: FontWeight.bold))]),
+                const SizedBox(height: 8),
+                if (forex.isEmpty) const Text('—') else ...["VND","EUR","JPY"].map((code){
+                  final rate = forex['rates']?[code];
+                  if (rate == null) return const SizedBox.shrink();
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 4),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [Text('USD/$code'), Text(rate.toString(), style: const TextStyle(fontWeight: FontWeight.w600))],
+                    ),
+                  );
+                }).toList(),
+              ],
+            ),
+          ),
+        ),
+      ],
     );
   }
 

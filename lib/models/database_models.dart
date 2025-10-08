@@ -179,33 +179,37 @@ class Transaction {
   });
 
   factory Transaction.fromJson(Map<String, dynamic> json) {
+    // Fallback mapping for legacy/Vietnamese columns
+    final createdAtStr = json['created_at'] ?? json['ngay_tao'];
+    final updatedAtStr = json['updated_at'] ?? json['ngay_cap_nhat'];
+
     return Transaction(
       id: json['id'] ?? '',
       userId: json['user_id'] ?? '',
       walletId: json['wallet_id'] ?? '',
-      transactionGroupId: json['transaction_group_id'] ?? '',
-      transactionType: json['transaction_type'] ?? '',
-      amount: (json['amount'] ?? 0).toDouble(),
-      balanceBefore: (json['balance_before'] ?? 0).toDouble(),
-      balanceAfter: (json['balance_after'] ?? 0).toDouble(),
-      counterpartUserId: json['counterpart_user_id'],
-      counterpartWalletId: json['counterpart_wallet_id'],
-      counterpartName: json['counterpart_name'],
-      description: json['description'] ?? '',
-      notes: json['notes'],
-      status: json['status'] ?? 'pending',
-      referenceNumber: json['reference_number'],
-      feeAmount: (json['fee_amount'] ?? 0).toDouble(),
-      createdAt: DateTime.parse(json['created_at']),
-      updatedAt: DateTime.parse(json['updated_at']),
-      completedAt: json['completed_at'] != null 
-          ? DateTime.parse(json['completed_at']) 
+      transactionGroupId: json['transaction_group_id'] ?? json['nhom_giao_dich_id'] ?? '',
+      transactionType: json['transaction_type'] ?? json['loai_giao_dich'] ?? '',
+      amount: (json['amount'] ?? json['so_tien'] ?? 0).toDouble(),
+      balanceBefore: (json['balance_before'] ?? json['so_du_truoc'] ?? 0).toDouble(),
+      balanceAfter: (json['balance_after'] ?? json['so_du_sau'] ?? 0).toDouble(),
+      counterpartUserId: json['counterpart_user_id'] ?? json['user_id_doi_tac'],
+      counterpartWalletId: json['counterpart_wallet_id'] ?? json['vi_doi_tac_id'],
+      counterpartName: json['counterpart_name'] ?? json['ten_doi_tac'],
+      description: json['description'] ?? json['mo_ta'] ?? '',
+      notes: json['notes'] ?? json['ghi_chu'],
+      status: json['status'] ?? json['trang_thai'] ?? 'pending',
+      referenceNumber: json['reference_number'] ?? json['ma_tham_chieu'],
+      feeAmount: (json['fee_amount'] ?? json['phi_giao_dich'] ?? 0).toDouble(),
+      createdAt: createdAtStr != null ? DateTime.parse(createdAtStr) : DateTime.now(),
+      updatedAt: updatedAtStr != null ? DateTime.parse(updatedAtStr) : DateTime.now(),
+      completedAt: (json['completed_at'] ?? json['ngay_hoan_tat']) != null 
+          ? DateTime.parse(json['completed_at'] ?? json['ngay_hoan_tat']) 
           : null,
       // Admin-only fields
-      userName: json['user_name'],
-      userEmail: json['user_email'],
-      counterpartFullName: json['counterpart_full_name'],
-      counterpartEmail: json['counterpart_email'],
+      userName: json['user_name'] ?? json['ten_nguoi_dung'],
+      userEmail: json['user_email'] ?? json['email_nguoi_dung'],
+      counterpartFullName: json['counterpart_full_name'] ?? json['ten_day_du_doi_tac'],
+      counterpartEmail: json['counterpart_email'] ?? json['email_doi_tac'],
     );
   }
 

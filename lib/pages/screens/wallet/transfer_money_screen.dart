@@ -10,8 +10,29 @@ import '../../../styles/constrant.dart';
 import '../../widgets/custom_elevated_button.dart';
 import '../../widgets/custom_text_field.dart';
 import 'transfer_success_screen.dart';
+import '../../../config/external_payment_config.dart';
 
 class TransferMoneyScreen extends StatefulWidget {
+  final String? initialWalletId;
+  final String? initialEmail;
+  // External (bank/wallet) recipient info from scanned external QR
+  final bool isExternalRecipient;
+  final String? externalBankCode;
+  final String? externalAccountNumber;
+  final String? externalAccountName;
+  final double? initialAmount;
+
+  TransferMoneyScreen({
+    Key? key,
+    this.initialWalletId,
+    this.initialEmail,
+    this.isExternalRecipient = false,
+    this.externalBankCode,
+    this.externalAccountNumber,
+    this.externalAccountName,
+    this.initialAmount,
+  }) : super(key: key);
+
   @override
   _TransferMoneyScreenState createState() => _TransferMoneyScreenState();
 }
@@ -34,9 +55,37 @@ class _TransferMoneyScreenState extends State<TransferMoneyScreen> {
   final RxString _lookupError = ''.obs;
   final RxString _generatedOtp = ''.obs;
   final RxInt _otpSecondsLeft = 0.obs;
+  // Trigger UI rebuilds for form state (amount changes, etc.)
+  final RxInt _formTick = 0.obs;
   
   Timer? _otpTimer;
   
+  @override
+  void initState() {
+    super.initState();
+    // Prefill from in-app wallet QR
+    if (!widget.isExternalRecipient && widget.initialWalletId != null && widget.initialWalletId!.isNotEmpty) {
+      _recipientIdController.text = widget.initialWalletId!;
+      // Trigger lookup; after lookup, optionally override email from QR
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        await _lookupRecipient();
+        if (widget.initialEmail != null && widget.initialEmail!.isNotEmpty && _recipientInfo.value != null) {
+          final info = Map<String, dynamic>.from(_recipientInfo.value!);
+          info['email'] = widget.initialEmail!;
+          _recipientInfo.value = info;
+        }
+      });
+    }
+
+    // Prefill from external QR (VietQR/MoMo/ZaloPay)
+    if (widget.isExternalRecipient) {
+      // Amount prefill if provided
+      if (widget.initialAmount != null && widget.initialAmount! > 0) {
+        _amountController.text = widget.initialAmount!.toStringAsFixed(0);
+      }
+    }
+  }
+
   @override
   void dispose() {
     _recipientIdController.dispose();
@@ -172,23 +221,57 @@ class _TransferMoneyScreenState extends State<TransferMoneyScreen> {
 
     try {
       final amount = double.parse(_amountController.text);
-      final success = await _walletController.transferMoney(
-        recipientWalletId: _recipientIdController.text.trim(),
-        amount: amount,
-        notes: _notesController.text.trim(),
-      );
+      bool success = false;
+      if (widget.isExternalRecipient) {
+        // A2: chuyển nội bộ vào ví placeholder, ghi chú kèm thông tin ngân hàng/STK
+        final bank = widget.externalBankCode ?? 'Ngoài hệ thống';
+        final acc = widget.externalAccountNumber ?? '-';
+        final name = (widget.externalAccountName ?? '').trim();
+        final extra = ' (Ngân hàng/Ứng dụng: ' + bank + ', STK/ID: ' + acc + (name.isNotEmpty ? ', Tên: ' + name : '') + ')';
+        final combinedNotes = (_notesController.text.trim().isNotEmpty
+                ? _notesController.text.trim() + extra
+                : 'Chuyển ra ngoài' + extra)
+            .trim();
 
-      if (success) {
-        _showOtpDialog.value = false;
-        _otpTimer?.cancel();
-        
-        Get.off(() => TransferSuccessScreen(
+        success = await _walletController.transferMoney(
+          recipientWalletId: ExternalPaymentConfig.payoutWalletId,
           amount: amount,
-          recipientName: _recipientInfo.value!['user_name'],
+          notes: combinedNotes,
+        );
+
+        if (success) {
+          _showOtpDialog.value = false;
+          _otpTimer?.cancel();
+
+          final displayRecipientName = (name.isNotEmpty ? name : (bank + ' - ' + acc));
+          Get.off(() => TransferSuccessScreen(
+                amount: amount,
+                recipientName: displayRecipientName,
+                recipientWalletId: ExternalPaymentConfig.payoutWalletId,
+                notes: combinedNotes.isEmpty ? null : combinedNotes,
+              ));
+        }
+      } else {
+        final successInternal = await _walletController.transferMoney(
           recipientWalletId: _recipientIdController.text.trim(),
-          notes: _notesController.text.trim().isEmpty ? null : _notesController.text.trim(),
-        ));
+          amount: amount,
+          notes: _notesController.text.trim(),
+        );
+
+        success = successInternal;
+
+        if (successInternal) {
+          _showOtpDialog.value = false;
+          _otpTimer?.cancel();
+          Get.off(() => TransferSuccessScreen(
+                amount: amount,
+                recipientName: _recipientInfo.value!['user_name'],
+                recipientWalletId: _recipientIdController.text.trim(),
+                notes: _notesController.text.trim().isEmpty ? null : _notesController.text.trim(),
+              ));
+        }
       }
+
     } catch (e) {
       print('❌ Error transferring: $e');
       Get.snackbar('Lỗi', 'Chuyển tiền thất bại');
@@ -198,16 +281,17 @@ class _TransferMoneyScreenState extends State<TransferMoneyScreen> {
   }
 
   bool _isValidTransfer() {
-    if (_recipientInfo.value == null) return false;
     if (_amountController.text.isEmpty) return false;
-    
     final amount = double.tryParse(_amountController.text);
     if (amount == null || amount <= 0) return false;
-    
     final currentBalance = _walletController.userWallet.value?.balance ?? 0;
     if (amount > currentBalance) return false;
-    
-    return true;
+    if (widget.isExternalRecipient) {
+      // external mode: không cần lookup ví nội bộ
+      return true;
+    }
+    // internal mode: cần có recipient info hợp lệ
+    return _recipientInfo.value != null;
   }
 
   @override
@@ -228,7 +312,7 @@ class _TransferMoneyScreenState extends State<TransferMoneyScreen> {
       body: Stack(
         children: [
           SingleChildScrollView(
-            padding: const EdgeInsets.all(20),
+            padding: const EdgeInsets.fromLTRB(20, 20, 20, 120),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -269,53 +353,131 @@ class _TransferMoneyScreenState extends State<TransferMoneyScreen> {
                 
                 SizedBox(height: 30),
                 
-                // Recipient ID Input
-                Text(
-                  'ID ví người nhận',
-                  style: Theme.of(context).textTheme.titleMedium!.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                SizedBox(height: 12),
-                Row(
-                  children: [
-                    Expanded(
-                      child: CustomTextField(
-                        controller: _recipientIdController,
-                        hintText: 'Nhập 10 chữ số ID ví',
-                        keyboardType: TextInputType.number,
-                        inputFormatters: [
-                          FilteringTextInputFormatter.digitsOnly,
-                          LengthLimitingTextInputFormatter(10),
-                        ],
-                        onChanged: (value) {
-                          if (value.length == 10) {
-                            _lookupRecipient();
-                          } else {
-                            _recipientInfo.value = null;
-                            _lookupError.value = '';
-                          }
-                        },
-                      ),
+                // Recipient Input/Panel
+                if (!widget.isExternalRecipient) ...[
+                  Text(
+                    'ID ví người nhận',
+                    style: Theme.of(context).textTheme.titleMedium!.copyWith(
+                      fontWeight: FontWeight.bold,
                     ),
-                    SizedBox(width: 12),
-                    Obx(() => _isLoadingRecipient.value
-                        ? Container(
-                            padding: EdgeInsets.all(12),
-                            child: SizedBox(
-                              width: 20,
-                              height: 20,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            ),
-                          )
-                        : _recipientInfo.value != null
-                            ? Container(
-                                padding: EdgeInsets.all(12),
-                                child: Icon(Icons.check_circle, color: Colors.green, size: 20),
-                              )
-                            : SizedBox.shrink()),
-                  ],
-                ),
+                  ),
+                  SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: CustomTextField(
+                          controller: _recipientIdController,
+                          hintText: 'Nhập 10 chữ số ID ví',
+                          keyboardType: TextInputType.number,
+                          inputFormatters: [
+                            FilteringTextInputFormatter.digitsOnly,
+                            LengthLimitingTextInputFormatter(10),
+                          ],
+                          onChanged: (value) {
+                            if (value.length == 10) {
+                              _lookupRecipient();
+                            } else {
+                              _recipientInfo.value = null;
+                              _lookupError.value = '';
+                            }
+                          },
+                        ),
+                      ),
+                      SizedBox(width: 12),
+                      Obx(() => _isLoadingRecipient.value
+                          ? Container(
+                              padding: EdgeInsets.all(12),
+                              child: SizedBox(
+                                width: 20,
+                                height: 20,
+                                child: CircularProgressIndicator(strokeWidth: 2),
+                              ),
+                            )
+                          : _recipientInfo.value != null
+                              ? Container(
+                                  padding: EdgeInsets.all(12),
+                                  child: Icon(Icons.check_circle, color: Colors.green, size: 20),
+                                )
+                              : SizedBox.shrink()),
+                    ],
+                  ),
+                  // Recipient Error
+                  Obx(() => _lookupError.value.isNotEmpty
+                      ? Padding(
+                          padding: const EdgeInsets.only(top: 8),
+                          child: Text(
+                            _lookupError.value,
+                            style: TextStyle(color: Colors.red, fontSize: 12),
+                          ),
+                        )
+                      : SizedBox.shrink()),
+                  // Recipient Info Display
+                  Obx(() => _recipientInfo.value != null
+                      ? Container(
+                          margin: const EdgeInsets.only(top: 16),
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: Colors.green.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: Colors.green.withOpacity(0.3)),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Icon(Icons.check_circle, color: Colors.green, size: 20),
+                                  SizedBox(width: 8),
+                                  Text(
+                                    'Thông tin người nhận',
+                                    style: TextStyle(
+                                      color: Colors.green.shade700,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              SizedBox(height: 12),
+                              _buildInfoRow('Tên:', _recipientInfo.value!['user_name']),
+                              _buildInfoRow('Email:', _recipientInfo.value!['email']),
+                              _buildInfoRow('ID ví:', _recipientInfo.value!['wallet_id']),
+                            ],
+                          ),
+                        )
+                      : SizedBox.shrink()),
+                ] else ...[
+                  // External recipient info panel
+                  Text(
+                    'Người nhận (ngoài hệ thống)',
+                    style: Theme.of(context).textTheme.titleMedium!.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  SizedBox(height: 12),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Colors.blueGrey.withOpacity(0.05),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.blueGrey.withOpacity(0.2)),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _buildInfoRow('Ngân hàng/Ứng dụng:', widget.externalBankCode ?? 'Không rõ'),
+                        _buildInfoRow('STK/ID:', widget.externalAccountNumber ?? 'Không rõ'),
+                        if ((widget.externalAccountName ?? '').isNotEmpty)
+                          _buildInfoRow('Tên:', widget.externalAccountName!),
+                        SizedBox(height: 4),
+                        Text(
+                          '* Thông tin người nhận thuộc hệ thống bên ngoài. Giao dịch sẽ trừ số dư ví của bạn và ghi nhận chuyển ra ngoài.',
+                          style: TextStyle(color: Colors.grey[600], fontSize: 12),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
                 
                 // Recipient Error
                 Obx(() => _lookupError.value.isNotEmpty
@@ -324,41 +486,6 @@ class _TransferMoneyScreenState extends State<TransferMoneyScreen> {
                         child: Text(
                           _lookupError.value,
                           style: TextStyle(color: Colors.red, fontSize: 12),
-                        ),
-                      )
-                    : SizedBox.shrink()),
-                
-                // Recipient Info Display
-                Obx(() => _recipientInfo.value != null
-                    ? Container(
-                        margin: const EdgeInsets.only(top: 16),
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: Colors.green.withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: Colors.green.withOpacity(0.3)),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              children: [
-                                Icon(Icons.check_circle, color: Colors.green, size: 20),
-                                SizedBox(width: 8),
-                                Text(
-                                  'Thông tin người nhận',
-                                  style: TextStyle(
-                                    color: Colors.green.shade700,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                              ],
-                            ),
-                            SizedBox(height: 12),
-                            _buildInfoRow('Tên:', _recipientInfo.value!['user_name']),
-                            _buildInfoRow('Email:', _recipientInfo.value!['email']),
-                            _buildInfoRow('ID ví:', _recipientInfo.value!['wallet_id']),
-                          ],
                         ),
                       )
                     : SizedBox.shrink()),
@@ -381,7 +508,7 @@ class _TransferMoneyScreenState extends State<TransferMoneyScreen> {
                     FilteringTextInputFormatter.digitsOnly,
                   ],
                   onChanged: (value) {
-                    _recipientInfo.refresh();
+                    _formTick.value++;
                   },
                   suffixIcon: Icon(Icons.attach_money, color: k_blue),
                 ),
@@ -403,19 +530,7 @@ class _TransferMoneyScreenState extends State<TransferMoneyScreen> {
                   maxLength: 200,
                 ),
                 
-                SizedBox(height: 40),
-                
-                // Transfer Button
-                Container(
-                  width: double.infinity,
-                  child: Obx(() => CustomElevatedButton(
-                    label: 'Xác nhận chuyển tiền',
-                    color: k_blue,
-                    onPressed: _isValidTransfer() ? _sendOtp : null,
-                  )),
-                ),
-                
-                SizedBox(height: 20),
+                SizedBox(height: 24),
               ],
             ),
           ),
@@ -430,6 +545,19 @@ class _TransferMoneyScreenState extends State<TransferMoneyScreen> {
               ? _buildPinDialog()
               : SizedBox.shrink()),
         ],
+      ),
+      bottomNavigationBar: SafeArea(
+        child: Padding(
+          padding: EdgeInsets.fromLTRB(20, 8, 20, 20 + MediaQuery.of(context).viewInsets.bottom),
+          child: Obx(() => SizedBox(
+                width: double.infinity,
+                child: CustomElevatedButton(
+                  label: _isProcessingTransfer.value ? 'Đang xử lý...' : 'Xác nhận chuyển tiền',
+                  color: k_blue,
+                  onPressed: _isProcessingTransfer.value || !_isValidTransfer() ? null : _sendOtp,
+                ),
+              )),
+        ),
       ),
     );
   }

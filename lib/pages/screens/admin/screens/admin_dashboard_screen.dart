@@ -3,6 +3,7 @@ import 'package:e_wallet/controllers/auth_controller.dart';
 import 'package:e_wallet/pages/screens/admin/widgets/admin_verification_item.dart';
 import 'package:e_wallet/pages/screens/admin/widgets/admin_user_item.dart';
 import 'package:e_wallet/pages/screens/admin/widgets/admin_transaction_item.dart';
+import 'package:e_wallet/pages/screens/admin/admin_transaction_history_screen.dart';
 import 'package:e_wallet/styles/constrant.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
@@ -48,6 +49,13 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
           IconButton(
             icon: Icon(Icons.refresh),
             onPressed: _loadData,
+          ),
+          IconButton(
+            tooltip: 'Tất cả giao dịch',
+            icon: Icon(Icons.list_alt),
+            onPressed: () {
+              Get.to(() => const AdminTransactionHistoryScreen());
+            },
           ),
           IconButton(
             icon: Icon(Icons.logout),

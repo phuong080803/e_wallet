@@ -182,6 +182,6 @@ final UserModel mainUser = UserModel(
   id: 0,
   image: k_imagePath,
   isSender: false,
-  name: 'Ali Ismail',
+  name: 'User',
   totalAmount: 1259,
 );

@@ -116,8 +116,9 @@ class TransactionController extends GetxController {
             .eq('user_id', user.id);
       }
 
+      // Do not rely on DB column names for ordering; fetch then sort in Dart to match whichever
+      // timestamp your view/table provides and what the model can parse.
       final response = await query
-          .order('created_at', ascending: false)
           .limit(100); // Limit for performance
 
       final List<Transaction> loadedTransactions = [];
@@ -126,6 +127,8 @@ class TransactionController extends GetxController {
         loadedTransactions.add(Transaction.fromJson(item));
       }
 
+      // Sort by createdAt desc in app to avoid DB column name mismatches
+      loadedTransactions.sort((a, b) => b.createdAt.compareTo(a.createdAt));
       _transactions.value = loadedTransactions;
     } catch (e) {
       print('Error loading transactions: $e');

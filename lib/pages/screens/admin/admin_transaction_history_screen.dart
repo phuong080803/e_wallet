@@ -89,7 +89,7 @@ class AdminTransactionHistoryScreen extends StatelessWidget {
           // Transaction list
           Expanded(
             child: Obx(() {
-              if (controller.isLoading) {
+              if (controller.isLoading.value) {
                 return const Center(
                   child: CircularProgressIndicator(
                     color: Color(0xFF2E7D32),
@@ -142,7 +142,7 @@ class AdminTransactionHistoryScreen extends StatelessWidget {
   }
 
   Widget _buildFilterTab(TransactionController controller, String filter, String label) {
-    final isSelected = controller.selectedFilter == filter;
+    final isSelected = controller.selectedFilter.value == filter;
     
     return Expanded(
       child: GestureDetector(

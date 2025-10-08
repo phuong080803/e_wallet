@@ -26,6 +26,12 @@ dependencies:
   flutter_localizations:
     sdk: flutter
   image_picker: ^1.0.4
+  mobile_scanner: ^3.5.5
+  http: ^1.2.2
+  cached_network_image: ^3.3.1
+  shimmer: ^3.0.0
+  url_launcher: ^6.3.0
+  qr_flutter: ^4.1.0
   uuid: ^4.1.0  # For generating transaction group IDs
   crypto: ^3.0.3  # For hashing Digital OTP PIN
 dev_dependencies:
