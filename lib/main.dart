@@ -15,6 +15,7 @@ import 'config/supabase_config.dart';
 import 'controllers/auth_controller.dart';
 import 'controllers/digital_otp_controller.dart';
 import 'services/token_service.dart';
+import 'services/inactivity_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -43,6 +44,24 @@ class _MyAppState extends State<MyApp> {
   void initState() {
     super.initState();
     _initializeApp();
+    // Setup auto logout on inactivity (5 minutes)
+    InactivityService.instance.configure(
+      timeout: const Duration(minutes: 5),
+      onTimeout: () async {
+        // Sign out and clear tokens
+        await _authController.signOut();
+      },
+    );
+    // Start timer initially (will only take effect after login)
+    InactivityService.instance.start();
+    // React to auth state changes
+    ever<bool>(_authController.isAuthenticated, (loggedIn) {
+      if (loggedIn) {
+        InactivityService.instance.resetTimer();
+      } else {
+        InactivityService.instance.stop();
+      }
+    });
   }
 
   Future<void> _initializeApp() async {
@@ -126,7 +145,7 @@ class _MyAppState extends State<MyApp> {
         ),
       );
     }
-    return GetMaterialApp(
+    final app = GetMaterialApp(
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         scaffoldBackgroundColor: Colors.white,
@@ -202,6 +221,11 @@ class _MyAppState extends State<MyApp> {
           page: () => DigitalOtpPinScreen(),
         ),
       ],
+    );
+    // Wrap with Listener to capture global user interactions and reset idle timer
+    return Listener(
+      onPointerDown: (_) => InactivityService.instance.notifyActivity(),
+      child: app,
     );
   }
 }

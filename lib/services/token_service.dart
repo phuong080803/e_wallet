@@ -7,6 +7,7 @@ class TokenService {
   static const String _userIdKey = 'supabase_user_id';
   static const String _userEmailKey = 'supabase_user_email';
   static const String _expiresAtKey = 'supabase_expires_at';
+  static const String _lastActivityAtKey = 'app_last_activity_at';
 
   static TokenService? _instance;
   static TokenService get instance => _instance ??= TokenService._();
@@ -22,6 +23,7 @@ class TokenService {
     await prefs.setString(_userIdKey, session.user.id);
     await prefs.setString(_userEmailKey, session.user.email ?? '');
     await prefs.setInt(_expiresAtKey, session.expiresAt ?? 0);
+    await setLastActivityNow();
     
     print('✅ Tokens saved to SharedPreferences');
   }
@@ -56,6 +58,19 @@ class TokenService {
     return prefs.getInt(_expiresAtKey);
   }
 
+  /// Cập nhật thời điểm hoạt động gần nhất (epoch seconds)
+  Future<void> setLastActivityNow() async {
+    final prefs = await SharedPreferences.getInstance();
+    final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+    await prefs.setInt(_lastActivityAtKey, now);
+  }
+
+  /// Lấy thời điểm hoạt động gần nhất
+  Future<int?> getLastActivityAt() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getInt(_lastActivityAtKey);
+  }
+
   /// Kiểm tra xem có tokens được lưu không
   Future<bool> hasStoredTokens() async {
     final accessToken = await getAccessToken();
@@ -72,60 +87,39 @@ class TokenService {
     return now >= expiresAt;
   }
 
-  /// Khôi phục session từ stored tokens
+  /// Khôi phục session chuẩn Supabase bằng refresh token
   Future<Session?> restoreSession() async {
     try {
-      final accessToken = await getAccessToken();
       final refreshToken = await getRefreshToken();
-      
-      if (accessToken == null || refreshToken == null) {
-        print('❌ No stored tokens found');
+      if (refreshToken == null || refreshToken.isEmpty) {
+        print('❌ No stored refresh token found');
         return null;
       }
 
-      // Kiểm tra nếu token đã hết hạn, thử refresh
-      if (await isTokenExpired()) {
-        print('🔄 Token expired, attempting refresh...');
-        return await refreshSession();
+      final response = await Supabase.instance.client.auth.recoverSession(refreshToken);
+      final session = response.session;
+      if (session != null) {
+        await saveTokens(session);
+        print('✅ Session recovered via refresh token');
+        return session;
       }
-
-      // Tạo session từ stored tokens
-      final userId = await getUserId();
-      final userEmail = await getUserEmail();
-      final expiresAt = await getExpiresAt();
-
-      if (userId == null) return null;
-
-      // Set session vào Supabase client
-      await Supabase.instance.client.auth.setSession(accessToken);
-      
-      print('✅ Session restored from stored tokens');
-      return Supabase.instance.client.auth.currentSession;
-      
+      return null;
     } catch (e) {
-      print('❌ Error restoring session: $e');
+      print('❌ Error recovering session: $e');
       await clearTokens();
       return null;
     }
   }
 
-  /// Refresh session sử dụng refresh token
+  /// Refresh session chuẩn Supabase (dựa trên session hiện tại)
   Future<Session?> refreshSession() async {
     try {
-      final refreshToken = await getRefreshToken();
-      if (refreshToken == null || refreshToken.isEmpty) {
-        print('❌ No refresh token available');
-        return null;
-      }
-
-      final response = await Supabase.instance.client.auth.refreshSession(refreshToken);
-      
+      final response = await Supabase.instance.client.auth.refreshSession();
       if (response.session != null) {
         await saveTokens(response.session!);
         print('✅ Session refreshed successfully');
         return response.session;
       }
-      
       return null;
     } catch (e) {
       print('❌ Error refreshing session: $e');
