@@ -164,11 +164,15 @@ class TransactionController extends GetxController {
   }
 
   String formatDate(DateTime date) {
-    return DateFormat('dd/MM/yyyy HH:mm').format(date);
+    // Cộng thêm 7 giờ để chuyển từ UTC sang UTC+7 (Việt Nam)
+    final vietnamTime = date.add(const Duration(hours: 7));
+    return DateFormat('dd/MM/yyyy HH:mm').format(vietnamTime);
   }
 
   String formatDateTime(DateTime date) {
-    return DateFormat('dd/MM/yyyy HH:mm:ss').format(date);
+    // Cộng thêm 7 giờ để chuyển từ UTC sang UTC+7 (Việt Nam)
+    final vietnamTime = date.add(const Duration(hours: 7));
+    return DateFormat('dd/MM/yyyy HH:mm:ss').format(vietnamTime);
   }
 
   String getTransactionPrefix(String transactionType) {
@@ -195,6 +199,15 @@ class TransactionController extends GetxController {
   Future<void> loadUserTransactions(String userId) async {
     if (!_isAdmin.value) return;
     await loadTransactions(userId: userId);
+  }
+
+  // Clear all transaction data (useful for sign out)
+  void clearAllTransactions() {
+    transactions.clear();
+    filteredTransactions.clear();
+    transactionStats.clear();
+    selectedFilter.value = 'all';
+    print('✅ All transaction data cleared');
   }
 
   Future<void> refreshTransactions() async {

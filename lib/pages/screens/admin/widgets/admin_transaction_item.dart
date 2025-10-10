@@ -278,7 +278,9 @@ class AdminTransactionItem extends StatelessWidget {
   }
 
   String _formatDateTime(DateTime dateTime) {
-    return '${dateTime.day}/${dateTime.month}/${dateTime.year} ${dateTime.hour}:${dateTime.minute.toString().padLeft(2, '0')}';
+    // Cộng thêm 7 giờ để chuyển từ UTC sang UTC+7 (Việt Nam)
+    final vietnamTime = dateTime.add(const Duration(hours: 7));
+    return '${vietnamTime.day}/${vietnamTime.month}/${vietnamTime.year} ${vietnamTime.hour}:${vietnamTime.minute.toString().padLeft(2, '0')}';
   }
 }
 

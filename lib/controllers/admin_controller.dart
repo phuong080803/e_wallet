@@ -1,7 +1,6 @@
 import 'package:get/get.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/database_models.dart' as models;
-import '../config/admin_config.dart';
 import '../pages/screens/auth/screens/login_screen.dart';
 
 class AdminController extends GetxController {
@@ -57,24 +56,22 @@ class AdminController extends GetxController {
   Future<void> loadAllUsers() async {
     isLoading.value = true;
     try {
-      // Use admin client with service role key
-      final response = await AdminConfig.adminClient.auth.admin.listUsers();
-      
-      allUsers.value = response.map((authUser) {
-        final metadata = authUser.userMetadata ?? {};
+      // Call Edge Function to list users (server verifies admin privileges)
+      final result = await Supabase.instance.client.functions.invoke('admin-list-users');
+      final data = result.data as List<dynamic>? ?? [];
+
+      allUsers.value = data.map((json) {
+        final map = Map<String, dynamic>.from(json as Map);
         return models.User(
-          id: authUser.id,
-          name: metadata['name'] ?? metadata['ho_ten'] ?? 'Không có tên',
-          email: authUser.email ?? 'Không có email',
-          image: metadata['hinh_anh'] ?? metadata['image'],
-          createdAt: DateTime.parse(authUser.createdAt),
-          updatedAt: authUser.updatedAt != null 
-              ? DateTime.parse(authUser.updatedAt!) 
-              : DateTime.parse(authUser.createdAt),
-          // Additional metadata fields
-          age: metadata['tuoi']?.toString(),
-          address: metadata['dia_chi'],
-          dateOfBirth: metadata['ngay_sinh'],
+          id: map['id'] ?? '',
+          name: map['name'] ?? 'Không có tên',
+          email: map['email'] ?? 'Không có email',
+          image: map['image'],
+          createdAt: DateTime.parse(map['created_at']),
+          updatedAt: DateTime.parse(map['updated_at']),
+          age: map['tuoi']?.toString(),
+          address: map['dia_chi'],
+          dateOfBirth: map['ngay_sinh'],
         );
       }).toList();
       
@@ -113,44 +110,16 @@ class AdminController extends GetxController {
   }) async {
     isLoading.value = true;
     try {
-      // Lấy thông tin verification trước
-      final verificationResponse = await Supabase.instance.client
-          .from('user_verifications')
-          .select('*')
-          .eq('id', verificationId)
-          .single();
+      // Gọi Edge Function để phê duyệt (server tự cập nhật DB và metadata)
+      await Supabase.instance.client.functions.invoke(
+        'admin-approve-verification',
+        body: {
+          'verification_id': verificationId,
+          'admin_notes': adminNotes,
+        },
+      );
 
-      final verification = models.UserVerification.fromJson(verificationResponse);
-      
-      // Cập nhật trạng thái verification
-      await Supabase.instance.client
-          .from('user_verifications')
-          .update({
-            'verification_status': 'verified',
-            'admin_notes': adminNotes,
-            'phone_verified': true,
-            'id_card_verified': true,
-          })
-          .eq('id', verificationId);
-
-      // Cập nhật metadata của user với trạng thái xác thực
-      try {
-        await AdminConfig.adminClient.auth.admin.updateUserById(
-          verification.userId,
-          attributes: AdminUserAttributes(
-            userMetadata: {
-              'verification_status': 'verified',
-              'verified_at': DateTime.now().toIso8601String(),
-              'verified_by_admin': true,
-            },
-          ),
-        );
-        print('✅ Updated user metadata with verification status');
-      } catch (metadataError) {
-        print('⚠️ Warning: Could not update user metadata: $metadataError');
-      }
-
-      print('✅ Approved verification for user: ${verification.userId}');
+      print('✅ Approved verification via Edge Function: $verificationId');
       Get.snackbar('Thành công', 'Xác thực đã được phê duyệt');
       await loadPendingVerifications();
       return true;
@@ -169,15 +138,15 @@ class AdminController extends GetxController {
   }) async {
     isLoading.value = true;
     try {
-      await Supabase.instance.client
-          .from('user_verifications')
-          .update({
-            'verification_status': 'rejected',
-            'admin_notes': adminNotes,
-          })
-          .eq('id', verificationId);
+      await Supabase.instance.client.functions.invoke(
+        'admin-reject-verification',
+        body: {
+          'verification_id': verificationId,
+          'admin_notes': adminNotes,
+        },
+      );
 
-      print('✅ Rejected verification: $verificationId');
+      print('✅ Rejected verification via Edge Function: $verificationId');
       Get.snackbar('Thành công', 'Xác thực đã bị từ chối');
       await loadPendingVerifications();
       return true;
@@ -198,20 +167,15 @@ class AdminController extends GetxController {
   }) async {
     isLoading.value = true;
     try {
-      Map<String, dynamic> updateData = {
-        'admin_notes': adminNotes,
-      };
-
-      if (fieldType == 'phone') {
-        updateData['phone_verified'] = isVerified;
-      } else if (fieldType == 'id_card') {
-        updateData['id_card_verified'] = isVerified;
-      }
-
-      await Supabase.instance.client
-          .from('user_verifications')
-          .update(updateData)
-          .eq('id', verificationId);
+      await Supabase.instance.client.functions.invoke(
+        'admin-verify-field',
+        body: {
+          'verification_id': verificationId,
+          'field_type': fieldType,
+          'is_verified': isVerified,
+          'admin_notes': adminNotes,
+        },
+      );
 
       Get.snackbar('Thành công', 'Trường $fieldType đã được ${isVerified ? 'xác thực' : 'từ chối'}');
       await loadPendingVerifications();

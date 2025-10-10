@@ -1,5 +1,6 @@
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 class TokenService {
   static const String _accessTokenKey = 'supabase_access_token';
@@ -8,21 +9,54 @@ class TokenService {
   static const String _userEmailKey = 'supabase_user_email';
   static const String _expiresAtKey = 'supabase_expires_at';
   static const String _lastActivityAtKey = 'app_last_activity_at';
+  static const String _migratedKey = 'token_storage_migrated_v1';
 
   static TokenService? _instance;
   static TokenService get instance => _instance ??= TokenService._();
   
   TokenService._();
 
+  // Secure storage instance
+  final FlutterSecureStorage _secure = const FlutterSecureStorage(
+    aOptions: AndroidOptions(encryptedSharedPreferences: true),
+    iOptions: IOSOptions(accessibility: KeychainAccessibility.first_unlock),
+  );
+
+  Future<void> _ensureMigrated() async {
+    final prefs = await SharedPreferences.getInstance();
+    final migrated = prefs.getBool(_migratedKey) ?? false;
+    if (migrated) return;
+
+    final legacyAccess = prefs.getString(_accessTokenKey);
+    final legacyRefresh = prefs.getString(_refreshTokenKey);
+    final legacyUserId = prefs.getString(_userIdKey);
+    final legacyUserEmail = prefs.getString(_userEmailKey);
+    final legacyExpires = prefs.getInt(_expiresAtKey);
+
+    if (legacyAccess != null) await _secure.write(key: _accessTokenKey, value: legacyAccess);
+    if (legacyRefresh != null) await _secure.write(key: _refreshTokenKey, value: legacyRefresh);
+    if (legacyUserId != null) await _secure.write(key: _userIdKey, value: legacyUserId);
+    if (legacyUserEmail != null) await _secure.write(key: _userEmailKey, value: legacyUserEmail);
+    if (legacyExpires != null) await _secure.write(key: _expiresAtKey, value: legacyExpires.toString());
+
+    // Clear legacy entries (non-destructive for _lastActivityAtKey)
+    await prefs.remove(_accessTokenKey);
+    await prefs.remove(_refreshTokenKey);
+    await prefs.remove(_userIdKey);
+    await prefs.remove(_userEmailKey);
+    await prefs.remove(_expiresAtKey);
+
+    await prefs.setBool(_migratedKey, true);
+    print('✅ Tokens migrated to flutter_secure_storage');
+  }
+
   /// Lưu tokens từ session vào SharedPreferences
   Future<void> saveTokens(Session session) async {
-    final prefs = await SharedPreferences.getInstance();
-    
-    await prefs.setString(_accessTokenKey, session.accessToken);
-    await prefs.setString(_refreshTokenKey, session.refreshToken ?? '');
-    await prefs.setString(_userIdKey, session.user.id);
-    await prefs.setString(_userEmailKey, session.user.email ?? '');
-    await prefs.setInt(_expiresAtKey, session.expiresAt ?? 0);
+    await _secure.write(key: _accessTokenKey, value: session.accessToken);
+    await _secure.write(key: _refreshTokenKey, value: session.refreshToken ?? '');
+    await _secure.write(key: _userIdKey, value: session.user.id);
+    await _secure.write(key: _userEmailKey, value: session.user.email ?? '');
+    await _secure.write(key: _expiresAtKey, value: (session.expiresAt ?? 0).toString());
     await setLastActivityNow();
     
     print('✅ Tokens saved to SharedPreferences');
@@ -30,32 +64,33 @@ class TokenService {
 
   /// Lấy access token từ SharedPreferences
   Future<String?> getAccessToken() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getString(_accessTokenKey);
+    await _ensureMigrated();
+    return await _secure.read(key: _accessTokenKey);
   }
 
   /// Lấy refresh token từ SharedPreferences
   Future<String?> getRefreshToken() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getString(_refreshTokenKey);
+    await _ensureMigrated();
+    return await _secure.read(key: _refreshTokenKey);
   }
 
   /// Lấy user ID từ SharedPreferences
   Future<String?> getUserId() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getString(_userIdKey);
+    await _ensureMigrated();
+    return await _secure.read(key: _userIdKey);
   }
 
   /// Lấy user email từ SharedPreferences
   Future<String?> getUserEmail() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getString(_userEmailKey);
+    await _ensureMigrated();
+    return await _secure.read(key: _userEmailKey);
   }
 
   /// Lấy thời gian hết hạn token
   Future<int?> getExpiresAt() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getInt(_expiresAtKey);
+    await _ensureMigrated();
+    final v = await _secure.read(key: _expiresAtKey);
+    return v == null ? null : int.tryParse(v);
   }
 
   /// Cập nhật thời điểm hoạt động gần nhất (epoch seconds)
@@ -130,15 +165,12 @@ class TokenService {
 
   /// Xóa tất cả tokens khỏi SharedPreferences
   Future<void> clearTokens() async {
-    final prefs = await SharedPreferences.getInstance();
-    
-    await prefs.remove(_accessTokenKey);
-    await prefs.remove(_refreshTokenKey);
-    await prefs.remove(_userIdKey);
-    await prefs.remove(_userEmailKey);
-    await prefs.remove(_expiresAtKey);
-    
-    print('✅ All tokens cleared from SharedPreferences');
+    await _secure.delete(key: _accessTokenKey);
+    await _secure.delete(key: _refreshTokenKey);
+    await _secure.delete(key: _userIdKey);
+    await _secure.delete(key: _userEmailKey);
+    await _secure.delete(key: _expiresAtKey);
+    print('✅ All tokens cleared from secure storage');
   }
 
   /// Lấy thông tin user từ stored tokens

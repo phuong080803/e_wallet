@@ -1,6 +1,8 @@
 import 'package:get/get.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../services/token_service.dart';
+import '../controllers/wallet_controller.dart';
+import '../controllers/transaction_controller.dart';
 import '../pages/screens/e-wallet_layout/e-wallet_layout_screen.dart';
 import '../pages/screens/home/screens/home_screen.dart';
 
@@ -166,6 +168,14 @@ class AuthController extends GetxController {
           print('❌ Navigation failed, trying direct navigation');
           Get.offAll(() => E_WalletLayoutScreen());
         }
+
+        // Force reload wallet for new user
+        try {
+          final walletController = Get.find<WalletController>();
+          await walletController.forceReloadWallet();
+        } catch (e) {
+          print('⚠️ Could not reload wallet after sign in: $e');
+        }
       }
       
       return true;
@@ -181,14 +191,29 @@ class AuthController extends GetxController {
     try {
       print('🚪 Signing out...');
       await Supabase.instance.client.auth.signOut();
-      
+
       // Xóa tokens khỏi SharedPreferences
       await _tokenService.clearTokens();
-      
+
+      // Clear tất cả state
       currentProfile.value = null;
       isAuthenticated.value = false;
-      print('✅ Sign out successful and tokens cleared');
-      
+
+      // Clear wallet state
+      final walletController = Get.find<WalletController>();
+      walletController.userWallet.value = null;
+      walletController.hasWallet.value = false;
+
+      // Clear transaction state nếu có
+      try {
+        final transactionController = Get.find<TransactionController>();
+        transactionController.clearAllTransactions();
+      } catch (e) {
+        print('⚠️ TransactionController not found during signout');
+      }
+
+      print('✅ Sign out successful and all states cleared');
+
       // Navigate to login screen
       Get.offAllNamed('/login');
     } catch (e) {
@@ -197,7 +222,16 @@ class AuthController extends GetxController {
       await _tokenService.clearTokens();
       currentProfile.value = null;
       isAuthenticated.value = false;
-      
+
+      // Clear wallet state even if signout failed
+      try {
+        final walletController = Get.find<WalletController>();
+        walletController.userWallet.value = null;
+        walletController.hasWallet.value = false;
+      } catch (e) {
+        print('⚠️ WalletController not found during error handling');
+      }
+
       // Navigate to login screen even if there was an error
       Get.offAllNamed('/login');
     }

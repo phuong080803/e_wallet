@@ -1,3 +1,5 @@
+import 'transaction_controller.dart';
+import 'auth_controller.dart';
 import 'package:get/get.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/database_models.dart';
@@ -22,19 +24,23 @@ class WalletController extends GetxController {
       final currentUser = Supabase.instance.client.auth.currentUser;
       if (currentUser == null) {
         print('No authenticated user found');
+        userWallet.value = null;
+        hasWallet.value = false;
         return;
       }
+
+      print('🔍 Loading wallet for user: ${currentUser.id}');
 
       final response = await Supabase.instance.client
           .from('wallets')
           .select('*')
           .eq('user_id', currentUser.id)
           .maybeSingle();
-      
+
       if (response != null) {
         userWallet.value = Wallet.fromJson(response);
         hasWallet.value = true;
-        print('✅ Loaded user wallet: ${userWallet.value?.walletId}');
+        print('✅ Loaded user wallet: ${userWallet.value?.walletId} (balance: ${userWallet.value?.balance})');
       } else {
         print('No wallet found for user');
         userWallet.value = null;
@@ -42,6 +48,8 @@ class WalletController extends GetxController {
       }
     } catch (e) {
       print('❌ Error loading user wallet: $e');
+      userWallet.value = null;
+      hasWallet.value = false;
     } finally {
       isLoading.value = false;
     }
@@ -181,6 +189,12 @@ class WalletController extends GetxController {
     return '${balance.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (Match m) => '${m[1]},')} VND';
   }
 
+  // Force reload wallet (useful after sign in/out)
+  Future<void> forceReloadWallet() async {
+    print('🔄 Force reloading wallet...');
+    await loadUserWallet();
+  }
+
   Future<bool> transferMoney({
     required String recipientWalletId,
     required double amount,
@@ -208,106 +222,36 @@ class WalletController extends GetxController {
         return false;
       }
 
-      // Get recipient wallet info
-      final recipientWalletResponse = await Supabase.instance.client
-          .from('wallets')
-          .select('*')
-          .eq('id', recipientWalletId)
-          .single();
+      // Gọi RPC thực thi giao dịch nguyên tử trên server
+      print('🔄 Calling RPC perform_transfer with params: ${{
+        'p_sender_wallet_id': userWallet.value!.id,
+        'p_recipient_wallet_id': recipientWalletId,
+        'p_amount': amount,
+        'p_notes': notes,
+      }}');
 
-      final recipientWallet = Wallet.fromJson(recipientWalletResponse);
+      final result = await Supabase.instance.client.rpc('perform_transfer', params: {
+        'p_sender_wallet_id': userWallet.value!.id,
+        'p_recipient_wallet_id': recipientWalletId,
+        'p_amount': amount,
+        'p_notes': notes,
+      });
 
-      // Check if trying to transfer to own wallet
-      if (recipientWallet.userId == currentUser.id) {
-        Get.snackbar('Lỗi', 'Không thể chuyển tiền cho chính mình');
-        return false;
+      print('✅ RPC result: $result');
+
+      // Sau khi RPC thành công, làm mới số dư ví hiện tại từ DB
+      await loadUserWallet();
+
+      // Làm mới lịch sử giao dịch để hiển thị giao dịch mới
+      try {
+        final transactionController = Get.find<TransactionController>();
+        await transactionController.refreshTransactions();
+        print('✅ Transactions refreshed after transfer');
+      } catch (e) {
+        print('⚠️ Could not refresh transactions: $e');
       }
 
-      // Start transaction
-      final senderNewBalance = userWallet.value!.balance - amount;
-      final recipientNewBalance = recipientWallet.balance + amount;
-
-      // Generate transaction group ID for linking sender and recipient transactions
-      final transactionGroupId = const Uuid().v4();
-      final referenceNumber = 'TXN${DateTime.now().millisecondsSinceEpoch}';
-
-      // Update sender wallet balance
-      await Supabase.instance.client
-          .from('wallets')
-          .update({
-            'so_du': senderNewBalance,
-            'ngay_cap_nhat': DateTime.now().toIso8601String(),
-          })
-          .eq('id', userWallet.value!.id);
-
-      // Update recipient wallet balance
-      await Supabase.instance.client
-          .from('wallets')
-          .update({
-            'so_du': recipientNewBalance,
-            'ngay_cap_nhat': DateTime.now().toIso8601String(),
-          })
-          .eq('id', recipientWallet.id);
-
-      // Get sender name for transaction records
-      final senderMetadata = currentUser.userMetadata ?? {};
-      final senderName = senderMetadata['ho_ten'] ?? senderMetadata['name'] ?? 'Người dùng';
-
-      // Create transaction record for sender (outgoing)
-      await Supabase.instance.client
-          .from('transactions')
-          .insert({
-            'user_id': currentUser.id,
-            'wallet_id': userWallet.value!.id,
-            'transaction_group_id': transactionGroupId,
-            'transaction_type': 'transfer_out',
-            'amount': amount,
-            'balance_before': userWallet.value!.balance,
-            'balance_after': senderNewBalance,
-            'counterpart_user_id': recipientWallet.userId,
-            'counterpart_wallet_id': recipientWallet.id,
-            'counterpart_name': recipientWallet.walletName,
-            'description': 'Chuyển tiền đến ${recipientWallet.walletName}',
-            'notes': notes,
-            'status': 'completed',
-            'reference_number': referenceNumber,
-            'fee_amount': 0.0,
-            'created_at': DateTime.now().toIso8601String(),
-            'updated_at': DateTime.now().toIso8601String(),
-            'completed_at': DateTime.now().toIso8601String(),
-          });
-
-      // Create transaction record for recipient (incoming)
-      await Supabase.instance.client
-          .from('transactions')
-          .insert({
-            'user_id': recipientWallet.userId,
-            'wallet_id': recipientWallet.id,
-            'transaction_group_id': transactionGroupId,
-            'transaction_type': 'transfer_in',
-            'amount': amount,
-            'balance_before': recipientWallet.balance,
-            'balance_after': recipientNewBalance,
-            'counterpart_user_id': currentUser.id,
-            'counterpart_wallet_id': userWallet.value!.id,
-            'counterpart_name': senderName,
-            'description': 'Nhận tiền từ $senderName',
-            'notes': notes,
-            'status': 'completed',
-            'reference_number': referenceNumber,
-            'fee_amount': 0.0,
-            'created_at': DateTime.now().toIso8601String(),
-            'updated_at': DateTime.now().toIso8601String(),
-            'completed_at': DateTime.now().toIso8601String(),
-          });
-
-      // Update local wallet state
-      userWallet.value = userWallet.value!.copyWith(
-        balance: senderNewBalance,
-        updatedAt: DateTime.now(),
-      );
-
-      print('✅ Transfer completed successfully');
+      print('✅ Transfer completed via RPC: $result');
       return true;
     } catch (e) {
       print('❌ Transfer error: $e');

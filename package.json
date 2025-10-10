@@ -1,0 +1,27 @@
+{
+  "name": "e_wallet",
+  "version": "1.0.0",
+  "description": "A new Flutter project.",
+  "main": "index.js",
+  "directories": {
+    "lib": "lib",
+    "test": "test"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "supabase": "supabase",
+    "supabase:init": "supabase init",
+    "supabase:start": "supabase start",
+    "supabase:stop": "supabase stop",
+    "supabase:status": "supabase status",
+    "supabase:login": "supabase login",
+    "supabase:db:reset": "supabase db reset",
+    "supabase:gen:types": "supabase gen types typescript --local > lib/supabase/database.types.ts"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "supabase": "^2.48.3"
+  }
+}

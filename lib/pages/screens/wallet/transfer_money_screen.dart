@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:async';
 import '../../../controllers/wallet_controller.dart';
 import '../../../controllers/digital_otp_controller.dart';
+import '../../../services/transfer_service.dart';
 import '../../../styles/constrant.dart';
 import '../../widgets/custom_elevated_button.dart';
 import '../../widgets/custom_text_field.dart';
@@ -40,6 +41,7 @@ class TransferMoneyScreen extends StatefulWidget {
 class _TransferMoneyScreenState extends State<TransferMoneyScreen> {
   final _walletController = Get.find<WalletController>();
   final _digitalOtpController = Get.put(DigitalOtpController());
+  final _transferService = TransferService();
   
   final _recipientIdController = TextEditingController();
   final _amountController = TextEditingController();
@@ -47,12 +49,13 @@ class _TransferMoneyScreenState extends State<TransferMoneyScreen> {
   final _otpController = TextEditingController();
   final _pinController = TextEditingController();
   
-  final RxBool _isLoadingRecipient = false.obs;
   final RxBool _isProcessingTransfer = false.obs;
-  final RxBool _showOtpDialog = false.obs;
   final RxBool _showPinDialog = false.obs;
+  final RxBool _showOtpDialog = false.obs;
+  final RxBool _isLoadingRecipient = false.obs;
   final Rx<Map<String, dynamic>?> _recipientInfo = Rx<Map<String, dynamic>?>(null);
   final RxString _lookupError = ''.obs;
+  final RxString _challengeId = ''.obs;
   final RxString _generatedOtp = ''.obs;
   final RxInt _otpSecondsLeft = 0.obs;
   // Trigger UI rebuilds for form state (amount changes, etc.)
@@ -86,6 +89,8 @@ class _TransferMoneyScreenState extends State<TransferMoneyScreen> {
     }
   }
 
+  // Đã bỏ dialog nhập OTP cá nhân. Sau khi xác thực PIN, sẽ tự động tạo và hiển thị OTP (countdown).
+
   @override
   void dispose() {
     _recipientIdController.dispose();
@@ -114,9 +119,10 @@ class _TransferMoneyScreenState extends State<TransferMoneyScreen> {
     _recipientInfo.value = null;
 
     try {
+      // Chỉ select các cột thực tế có trong bảng wallets (tiếng Việt)
       final walletResponse = await Supabase.instance.client
           .from('wallets')
-          .select('user_id, id, user_name, user_email')
+          .select('user_id, id')
           .eq('id', recipientId)
           .maybeSingle();
       
@@ -126,20 +132,29 @@ class _TransferMoneyScreenState extends State<TransferMoneyScreen> {
       }
 
       final currentUser = Supabase.instance.client.auth.currentUser;
-      if (walletResponse['user_id'] == currentUser?.id) {
+      if (currentUser == null) {
+        _lookupError.value = 'Vui lòng đăng nhập lại';
+        return;
+      }
+
+      if (walletResponse['user_id'] == currentUser.id) {
         _lookupError.value = 'Không thể chuyển tiền cho chính mình';
         return;
       }
 
+      // Lấy thông tin người dùng từ auth metadata (không phải từ bảng wallets)
       String userName = 'Người dùng';
       String userEmail = 'Chưa có thông tin email';
       
       try {
-        userName = walletResponse['user_name'] ?? 'Người dùng';
-        userEmail = walletResponse['user_email'] ?? 'Chưa có thông tin email';
-        print('✅ Found user info from wallet: name=$userName, email=$userEmail');
+        // Không dùng auth.admin vì đã loại bỏ quyền admin từ client
+        // Thay vào đó, tạm thời hiển thị tên mặc định và email mặc định
+        // Thông tin chi tiết sẽ được hiển thị sau khi giao dịch thành công
+        userName = 'Người nhận ${recipientId.substring(recipientId.length - 4)}'; // Hiển thị 4 số cuối
+        userEmail = 'Chưa có thông tin email';
+        print('✅ Using fallback user info: name=$userName');
       } catch (e) {
-        print('❌ Could not fetch user info from wallet: $e');
+        print('❌ Error getting user info: $e');
       }
         
       _recipientInfo.value = {
@@ -196,32 +211,62 @@ class _TransferMoneyScreenState extends State<TransferMoneyScreen> {
     _showPinDialog.value = true;
   }
 
-  // Digital OTP Flow - Bước 2: Sinh OTP và hiển thị với countdown
-  void _generateAndShowOtp() {
-    final code = (100000 + (DateTime.now().millisecondsSinceEpoch % 900000)).toString();
-    _generatedOtp.value = code;
-    _otpSecondsLeft.value = 120; // 120 giây
-    _showOtpDialog.value = true;
+  // Digital OTP Flow - Bước 2 (nhánh B): Tự sinh OTP và hiển thị với countdown (dùng từ lần 2 trở đi)
+  Future<void> _createChallengeAndPromptOtp() async {
+    try {
+      final amount = double.parse(_amountController.text);
+      final senderWalletId = _walletController.userWallet.value!.id;
+      final recipientId = widget.isExternalRecipient
+          ? ExternalPaymentConfig.payoutWalletId
+          : _recipientIdController.text.trim();
 
-    _otpTimer?.cancel();
-    _otpTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      if (_otpSecondsLeft.value <= 1) {
-        timer.cancel();
-        _showOtpDialog.value = false;
-        Get.snackbar('Hết hạn', 'Mã OTP đã hết hạn, vui lòng thử lại');
-      } else {
-        _otpSecondsLeft.value--;
+      final challenge = await _transferService.createChallenge(
+        senderWalletId: senderWalletId,
+        recipientWalletId: recipientId,
+        amount: amount,
+        notes: _notesController.text.trim().isNotEmpty ? _notesController.text.trim() : null,
+      );
+
+      _challengeId.value = challenge['challengeId'] ?? '';
+      _generatedOtp.value = challenge['otp'] ?? '';
+      if (_generatedOtp.value.isEmpty) {
+        Get.snackbar('Lỗi', 'Không thể tạo mã OTP');
+        return;
       }
-    });
+
+      _otpSecondsLeft.value = 120; // 120 giây
+      _showOtpDialog.value = true;
+
+      _otpTimer?.cancel();
+      _otpTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+        if (_otpSecondsLeft.value <= 1) {
+          timer.cancel();
+          _showOtpDialog.value = false;
+          Get.snackbar('Hết hạn', 'Mã OTP đã hết hạn, vui lòng thử lại');
+        } else {
+          _otpSecondsLeft.value--;
+        }
+      });
+    } catch (e) {
+      Get.snackbar('Lỗi', 'Không thể khởi tạo giao dịch: $e');
+    }
   }
 
-  // Digital OTP Flow - Bước 3: Xác thực và chuyển tiền
+  // Digital OTP Flow - Bước 3: Xác thực OTP và chuyển tiền (sử dụng OTP đã sinh)
   Future<void> _verifyOtpAndTransfer() async {
     _isProcessingTransfer.value = true;
 
     try {
       final amount = double.parse(_amountController.text);
       bool success = false;
+
+      // Tự động sử dụng OTP đã sinh thay vì gọi server
+      final generatedOtp = _generatedOtp.value;
+      if (generatedOtp.isEmpty) {
+        Get.snackbar('Lỗi', 'Không tìm thấy mã OTP');
+        return;
+      }
+
       if (widget.isExternalRecipient) {
         // A2: chuyển nội bộ vào ví placeholder, ghi chú kèm thông tin ngân hàng/STK
         final bank = widget.externalBankCode ?? 'Ngoài hệ thống';
@@ -281,13 +326,15 @@ class _TransferMoneyScreenState extends State<TransferMoneyScreen> {
   }
 
   bool _isValidTransfer() {
+    // Tie Obx rebuild to form changes
+    final _ = _formTick.value;
     if (_amountController.text.isEmpty) return false;
     final amount = double.tryParse(_amountController.text);
     if (amount == null || amount <= 0) return false;
     final currentBalance = _walletController.userWallet.value?.balance ?? 0;
     if (amount > currentBalance) return false;
     if (widget.isExternalRecipient) {
-      // external mode: không cần lookup ví nội bộ
+      // external mode: chỉ cần số tiền hợp lệ; hạn mức/số dư sẽ được check trong transferMoney()
       return true;
     }
     // internal mode: cần có recipient info hợp lệ
@@ -592,7 +639,7 @@ class _TransferMoneyScreenState extends State<TransferMoneyScreen> {
     );
   }
 
-  // Dialog hiển thị OTP với countdown (giống hình 2)
+  // Dialog hiển thị OTP với countdown (hiển thị OTP đã sinh)
   Widget _buildDigitalOtpDialog() {
     return Container(
       color: Colors.black54,
@@ -782,6 +829,7 @@ class _TransferMoneyScreenState extends State<TransferMoneyScreen> {
     }
     _showPinDialog.value = false;
     _pinController.clear();
-    _generateAndShowOtp();
+    // Bỏ dialog OTP cá nhân, gửi OTP tự sinh luôn
+    await _createChallengeAndPromptOtp();
   }
 }
