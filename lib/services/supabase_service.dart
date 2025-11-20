@@ -10,6 +10,30 @@ class SupabaseService {
   final TokenService _tokenService = TokenService.instance;
   SupabaseClient get _client => Supabase.instance.client;
 
+  // Lightweight per-user request rate limiting guard
+  Future<void> _rateLimitGuard(String endpoint) async {
+    try {
+      final uid = _client.auth.currentUser?.id;
+      if (uid == null) return;
+      // Check allowance in current minute window
+      await _client.rpc('assert_user_request_allowed', params: {
+        'p_user_id': uid,
+        'p_max_per_minute': 60,
+      });
+      // Log request for accounting
+      await _client.rpc('log_user_request', params: {
+        'p_user_id': uid,
+        'p_endpoint': endpoint,
+        'p_ip': null,
+      });
+    } catch (e) {
+      if (e.toString().contains('rate_limit_exceeded')) {
+        throw Exception('Bạn đã thực hiện quá nhiều yêu cầu. Vui lòng thử lại sau 1 phút.');
+      }
+      rethrow;
+    }
+  }
+
   /// Đảm bảo có session hợp lệ trước khi thực hiện operations
   Future<bool> _ensureValidSession() async {
     try {
@@ -50,6 +74,7 @@ class SupabaseService {
     }
 
     try {
+      await _rateLimitGuard('select:$table');
       var query = _client.from(table).select(columns);
 
       // Áp dụng filters
@@ -87,6 +112,7 @@ class SupabaseService {
     }
 
     try {
+      await _rateLimitGuard('insert:$table');
       final response = await _client
           .from(table)
           .insert(data)
@@ -112,6 +138,7 @@ class SupabaseService {
     }
 
     try {
+      await _rateLimitGuard('update:$table');
       var query = _client.from(table).update(data);
 
       // Áp dụng filters
@@ -138,6 +165,7 @@ class SupabaseService {
     }
 
     try {
+      await _rateLimitGuard('delete:$table');
       var query = _client.from(table).delete();
 
       // Áp dụng filters
@@ -199,6 +227,7 @@ class SupabaseService {
     }
 
     try {
+      await _rateLimitGuard('rpc:$functionName');
       final response = await _client.rpc(functionName, params: params);
       print('✅ RPC call successful: $functionName');
       return response;

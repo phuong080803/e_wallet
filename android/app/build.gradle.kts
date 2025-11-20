@@ -7,7 +7,7 @@ plugins {
 
 android {
     namespace = "com.example.e_wallet"
-    compileSdk = flutter.compileSdkVersion
+    compileSdk = 36
     ndkVersion = "27.0.12077973"
 
     compileOptions {
@@ -60,4 +60,6 @@ dependencies {
     implementation("androidx.core:core-ktx:1.12.0")
     implementation("androidx.activity:activity-ktx:1.8.2")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.7.0")
+    implementation("androidx.window:window:1.2.0")
+    implementation("androidx.window:window-java:1.2.0")
 }

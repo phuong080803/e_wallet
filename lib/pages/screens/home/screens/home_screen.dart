@@ -178,6 +178,8 @@ class HomeScreen extends StatelessWidget {
                                       fontWeight: FontWeight.bold,
                                       color: Colors.white,
                                     ),
+                                    overflow: TextOverflow.ellipsis,
+                                    maxLines: 1,
                                   );
                                 } else {
                                   return Text(
@@ -187,6 +189,8 @@ class HomeScreen extends StatelessWidget {
                                       fontWeight: FontWeight.bold,
                                       color: Colors.white,
                                     ),
+                                    overflow: TextOverflow.ellipsis,
+                                    maxLines: 1,
                                   );
                                 }
                               }),
@@ -237,36 +241,47 @@ class HomeScreen extends StatelessWidget {
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                         children: [
-                          _buildQuickActionButton(
-                            context,
-                            icon: Icons.add_circle_outline,
-                            label: "Nạp tiền",
-                            color: Colors.green,
-                            onTap: () => Get.to(() => WalletScreen()),
+                          Expanded(
+                            child: _buildQuickActionButton(
+                              context,
+                              icon: Icons.add_circle_outline,
+                              label: "Nạp tiền",
+                              color: Colors.green,
+                              onTap: () => Get.to(() => WalletScreen()),
+                            ),
                           ),
-                          _buildQuickActionButton(
-                            context,
-                            icon: Icons.send_outlined,
-                            label: "Chuyển tiền",
-                            color: Colors.blue,
-                            onTap: () => Get.to(() => WalletScreen()),
+                          SizedBox(width: 8),
+                          Expanded(
+                            child: _buildQuickActionButton(
+                              context,
+                              icon: Icons.send_outlined,
+                              label: "Chuyển tiền",
+                              color: Colors.blue,
+                              onTap: () => Get.to(() => WalletScreen()),
+                            ),
                           ),
-                          _buildQuickActionButton(
-                            context,
-                            icon: Icons.qr_code_scanner,
-                            label: "Quét QR",
-                            color: Colors.purple,
-                            onTap: () => Get.to(() => QRScanScreen()),
+                          SizedBox(width: 8),
+                          Expanded(
+                            child: _buildQuickActionButton(
+                              context,
+                              icon: Icons.qr_code_scanner,
+                              label: "Quét QR",
+                              color: Colors.purple,
+                              onTap: () => Get.to(() => QRScanScreen()),
+                            ),
                           ),
-                          _buildQuickActionButton(
-                            context,
-                            icon: Icons.history,
-                            label: "Lịch sử",
-                            color: Colors.orange,
-                            onTap: () {
-                              E_WalletLayoutController.changeIndex(1);
-                              Get.offAll(() => E_WalletLayoutScreen());
-                            },
+                          SizedBox(width: 8),
+                          Expanded(
+                            child: _buildQuickActionButton(
+                              context,
+                              icon: Icons.history,
+                              label: "Lịch sử",
+                              color: Colors.orange,
+                              onTap: () {
+                                E_WalletLayoutController.changeIndex(1);
+                                Get.offAll(() => E_WalletLayoutScreen());
+                              },
+                            ),
                           ),
                         ],
                       ),
@@ -340,6 +355,8 @@ class HomeScreen extends StatelessWidget {
                                 color: Colors.green.shade600,
                                 height: 1.4,
                               ),
+                              overflow: TextOverflow.ellipsis,
+                              maxLines: 2,
                             ),
                             const SizedBox(height: 20),
                             Container(
@@ -455,6 +472,8 @@ class HomeScreen extends StatelessWidget {
                                           fontWeight: FontWeight.bold,
                                           color: k_blue,
                                         ),
+                                        overflow: TextOverflow.ellipsis,
+                                        maxLines: 1,
                                       ),
                                     ],
                                   ),
@@ -548,7 +567,6 @@ class HomeScreen extends StatelessWidget {
       onTap: onTap,
       borderRadius: BorderRadius.circular(12),
       child: Container(
-        width: 70,
         child: Column(
           children: [
             Container(
@@ -573,6 +591,8 @@ class HomeScreen extends StatelessWidget {
                 color: Colors.grey[700],
               ),
               textAlign: TextAlign.center,
+              overflow: TextOverflow.ellipsis,
+              maxLines: 1,
             ),
           ],
         ),
@@ -606,30 +626,68 @@ class HomeScreen extends StatelessWidget {
           final price = (it['current_price'] ?? '').toString();
           final change = (it['price_change_percentage_24h'] ?? 0).toDouble();
           final positive = change >= 0;
-          return Row(
-            children: [
-              Text(name, style: TextStyle(fontWeight: FontWeight.w600)),
-              const SizedBox(width: 6),
-              Text(
-                price,
-                style: TextStyle(color: Colors.black87),
-              ),
-              const SizedBox(width: 6),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                decoration: BoxDecoration(
-                  color: positive ? Colors.green.withOpacity(0.1) : Colors.red.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(4),
+          return Container(
+            width: 150,
+            child: Row(
+              children: [
+                Expanded(
+                  flex: 3,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        name,
+                        style: TextStyle(fontWeight: FontWeight.w600, fontSize: 12),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ),
                 ),
-                child: Text(
-                  '${change.toStringAsFixed(2)}%',
-                  style: TextStyle(color: positive ? Colors.green : Colors.red, fontSize: 12, fontWeight: FontWeight.w600),
+                Expanded(
+                  flex: 3,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        price,
+                        style: TextStyle(color: Colors.black87, fontSize: 11),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-            ],
+                Expanded(
+                  flex: 2,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                        decoration: BoxDecoration(
+                          color: positive ? Colors.green.withOpacity(0.1) : Colors.red.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(3),
+                        ),
+                        child: Text(
+                          '${change.toStringAsFixed(2)}%',
+                          style: TextStyle(
+                            color: positive ? Colors.green : Colors.red,
+                            fontSize: 10,
+                            fontWeight: FontWeight.w600
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
           );
         },
-        separatorBuilder: (_, __) => const SizedBox(width: 16),
+        separatorBuilder: (_, __) => const SizedBox(width: 12),
         itemCount: items.length,
       ),
     );
@@ -663,7 +721,21 @@ class HomeScreen extends StatelessWidget {
                     padding: const EdgeInsets.only(bottom: 4),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [Text(name), Text(price, style: const TextStyle(fontWeight: FontWeight.w600))],
+                      children: [
+                        Expanded(
+                          child: Text(
+                            name,
+                            overflow: TextOverflow.ellipsis,
+                            maxLines: 1,
+                          ),
+                        ),
+                        Text(
+                          price,
+                          style: const TextStyle(fontWeight: FontWeight.w600),
+                          overflow: TextOverflow.ellipsis,
+                          maxLines: 1,
+                        ),
+                      ],
                     ),
                   );
                 }).toList(),
@@ -695,7 +767,21 @@ class HomeScreen extends StatelessWidget {
                     padding: const EdgeInsets.only(bottom: 4),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [Text('USD/$code'), Text(rate.toString(), style: const TextStyle(fontWeight: FontWeight.w600))],
+                      children: [
+                        Expanded(
+                          child: Text(
+                            'USD/$code',
+                            overflow: TextOverflow.ellipsis,
+                            maxLines: 1,
+                          ),
+                        ),
+                        Text(
+                          rate.toString(),
+                          style: const TextStyle(fontWeight: FontWeight.w600),
+                          overflow: TextOverflow.ellipsis,
+                          maxLines: 1,
+                        ),
+                      ],
                     ),
                   );
                 }).toList(),

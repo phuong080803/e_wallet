@@ -4,6 +4,7 @@ import 'package:e_wallet/pages/screens/profile/screens/my_account_screen.dart';
 import 'package:e_wallet/pages/screens/profile/screens/my_cards_screen.dart';
 import 'package:e_wallet/pages/screens/profile/screens/settings_screen.dart';
 import 'package:e_wallet/pages/screens/profile/screens/digital_otp_pin_screen.dart';
+import 'package:e_wallet/pages/screens/profile/screens/biometric_settings_screen.dart';
 import 'package:e_wallet/pages/screens/wallet/wallet_screen.dart';
 import 'package:e_wallet/pages/widgets/user_image.dart';
 import 'package:e_wallet/controllers/auth_controller.dart';
@@ -12,6 +13,7 @@ import '../../../../styles/constrant.dart';
 import 'package:e_wallet/styles/size_config.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../widgets/build_profile_item.dart';
 
@@ -142,7 +144,7 @@ class ProfileScreen extends StatelessWidget {
             AppBar(
               backgroundColor: k_grey,
               title: Text(
-                "My Profile",
+                "Hồ sơ của tôi",
                 style: Theme.of(context).textTheme.displayMedium!.copyWith(fontSize: 22),
               ),
               centerTitle: true,
@@ -166,7 +168,7 @@ class ProfileScreen extends StatelessWidget {
                   UserImage(imagePath: k_imagePath, raduis: 130),
                   SizedBox(height: 15),
                   Text(
-                    mainUser.name,
+                    Get.find<AuthController>().currentProfile.value?.name ?? 'Người dùng',
                     style: Theme.of(context).textTheme.displayMedium!.copyWith(fontSize: 18),
                   ),
                   SizedBox(height: 15),
@@ -190,7 +192,7 @@ class ProfileScreen extends StatelessWidget {
                     title: "Ví điện tử",
                     onTap: _handleWalletAction,
                     trailing: Obx(() {
-                      final walletController = Get.put(WalletController());
+                      final walletController = Get.find<WalletController>();
                       return Container(
                         padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                         decoration: BoxDecoration(
@@ -219,6 +221,14 @@ class ProfileScreen extends StatelessWidget {
                     title: "Digital OTP PIN",
                     onTap: () => Get.toNamed('/digital-otp-pin'),
                   ),
+                  SizedBox(height: 20),
+                  BuildProfileItem(
+                    context: context,
+                    iconPath: "assets/images/settings_icon.png",
+                    title: "Sinh trắc học",
+                    onTap: () => Get.to(() => const BiometricSettingsScreen()),
+                  ),
+                  SizedBox(height: 20),
                   SizedBox(height: 20),
                   BuildProfileItem(
                     context: context,

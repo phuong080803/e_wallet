@@ -34,6 +34,10 @@ dependencies:
   qr_flutter: ^4.1.0
   uuid: ^4.1.0  # For generating transaction group IDs
   crypto: ^3.0.3  # For hashing Digital OTP PIN
+  google_mlkit_face_detection: ^0.11.1  # For face detection and embedding extraction
+  google_mlkit_commons: ^0.8.1  # Required for InputImage and related classes
+  camera: ^0.10.5+2  # For camera access in face verification
+  local_auth: ^2.1.8  # For biometric authentication (fingerprint, face ID)
 dev_dependencies:
   flutter_test:
     sdk: flutter

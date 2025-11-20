@@ -6,12 +6,17 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:async';
 import '../../../controllers/wallet_controller.dart';
 import '../../../controllers/digital_otp_controller.dart';
+import '../../../controllers/biometric_controller.dart';
 import '../../../services/transfer_service.dart';
 import '../../../styles/constrant.dart';
 import '../../widgets/custom_elevated_button.dart';
 import '../../widgets/custom_text_field.dart';
+import  '../../widgets/face_verification_dialog.dart';
 import 'transfer_success_screen.dart';
+import 'transfer_failure_screen.dart';
+import '../../../services/transaction_block_service.dart';
 import '../../../config/external_payment_config.dart';
+import '../e-wallet_layout/e-wallet_layout_screen.dart';
 
 class TransferMoneyScreen extends StatefulWidget {
   final String? initialWalletId;
@@ -41,7 +46,9 @@ class TransferMoneyScreen extends StatefulWidget {
 class _TransferMoneyScreenState extends State<TransferMoneyScreen> {
   final _walletController = Get.find<WalletController>();
   final _digitalOtpController = Get.put(DigitalOtpController());
+  final _biometric = Get.put(BiometricController());
   final _transferService = TransferService();
+  final _transactionBlockService = TransactionBlockService();
   
   final _recipientIdController = TextEditingController();
   final _amountController = TextEditingController();
@@ -58,11 +65,38 @@ class _TransferMoneyScreenState extends State<TransferMoneyScreen> {
   final RxString _challengeId = ''.obs;
   final RxString _generatedOtp = ''.obs;
   final RxInt _otpSecondsLeft = 0.obs;
+  // Track wrong PIN attempts
+  final RxInt _wrongPinAttempts = 0.obs;
   // Trigger UI rebuilds for form state (amount changes, etc.)
   final RxInt _formTick = 0.obs;
   
   Timer? _otpTimer;
-  
+  final int _otpTimeoutSeconds = 60; // 1 minute OTP timeout
+
+  void _startOtpTimer() {
+    _otpSecondsLeft.value = _otpTimeoutSeconds;
+    _otpTimer?.cancel(); // Cancel any existing timer
+    _otpTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (_otpSecondsLeft.value <= 1) {
+        _otpTimer?.cancel();
+        _otpSecondsLeft.value = 0;
+      } else {
+        _otpSecondsLeft.value--;
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _recipientIdController.dispose();
+    _amountController.dispose();
+    _notesController.dispose();
+    _otpController.dispose();
+    _pinController.dispose();
+    _otpTimer?.cancel();
+    super.dispose();
+  }
+
   @override
   void initState() {
     super.initState();
@@ -91,16 +125,6 @@ class _TransferMoneyScreenState extends State<TransferMoneyScreen> {
 
   // Đã bỏ dialog nhập OTP cá nhân. Sau khi xác thực PIN, sẽ tự động tạo và hiển thị OTP (countdown).
 
-  @override
-  void dispose() {
-    _recipientIdController.dispose();
-    _amountController.dispose();
-    _notesController.dispose();
-    _otpController.dispose();
-    _pinController.dispose();
-    _otpTimer?.cancel();
-    super.dispose();
-  }
 
   Future<void> _lookupRecipient() async {
     final recipientId = _recipientIdController.text.trim();
@@ -171,44 +195,186 @@ class _TransferMoneyScreenState extends State<TransferMoneyScreen> {
     }
   }
 
-  // Digital OTP Flow - Bước 1: Kiểm tra và yêu cầu PIN
-  Future<void> _sendOtp() async {
-    final hasPin = await _digitalOtpController.hasPin();
-    if (!hasPin) {
-      // Hiển thị thông báo yêu cầu tạo PIN trong Profile
+  // Hàm kiểm tra sinh trắc học (ưu tiên theo lựa chọn) trước khi nhập PIN (cho giao dịch lớn)
+  Future<bool> _verifyBiometricBeforePin() async {
+    try {
+      final user = Supabase.instance.client.auth.currentUser;
+      if (user == null) {
+        Get.snackbar('Lỗi', 'Vui lòng đăng nhập lại');
+        return false;
+      }
+
+      final metadata = user.userMetadata ?? {};
+      // Determine preferred method
+      final preferred = await _biometric.getPreferredMethod();
+      final faceEnrolled = metadata['face_embedding'] != null;
+
+      // If preferred is fingerprint -> authenticate fingerprint directly
+      if (preferred == 'fingerprint') {
+        final fpAvailable = await _biometric.isFingerprintAvailable();
+        if (fpAvailable) {
+          final ok = await _biometric.authenticateFingerprint();
+          if (!ok) {
+            Get.snackbar('Từ chối', 'Xác thực vân tay thất bại. Giao dịch bị hủy.');
+            return false;
+          }
+          return true;
+        } else {
+          Get.snackbar('Không khả dụng', 'Vân tay không khả dụng. Hãy thêm vân tay trong cài đặt hệ thống.');
+          return false;
+        }
+      }
+
+      // Fallback to face if available/enrolled
+      if (faceEnrolled) {
+        final faceVerified = await Get.dialog<bool>(const FaceVerificationDialog());
+        if (faceVerified == true) return true;
+        Get.snackbar('Từ chối', 'Xác thực khuôn mặt thất bại. Giao dịch bị hủy.');
+        return false;
+      }
+
+      // If neither available, prompt to enroll
       Get.dialog(
         AlertDialog(
-          title: Row(
+          title: const Text('Yêu cầu xác thực sinh trắc học'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Icon(Icons.security, color: k_blue),
-              SizedBox(width: 12),
-              Text('Chưa có Digital OTP PIN'),
+              const Text('Để thực hiện giao dịch giá trị cao (≥ 20,000,000 VND), bạn cần thiết lập xác thực sinh trắc học.'),
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.blue.shade50,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.blue.shade200),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: const [
+                    Text('Quy trình xác thực:', style: TextStyle(fontWeight: FontWeight.bold)),
+                    SizedBox(height: 8),
+                    Text('1. Xác thực sinh trắc học (Vân tay/Khuôn mặt)'),
+                    Text('2. Nhập mã PIN Digital OTP'),
+                    Text('3. Xác nhận giao dịch'),
+                  ],
+                ),
+              ),
             ],
-          ),
-          content: Text(
-            'Bạn cần tạo mã PIN Digital OTP trong phần Hồ sơ trước khi có thể chuyển tiền.\n\nVui lòng vào Hồ sơ > Digital OTP PIN để thiết lập.',
           ),
           actions: [
             TextButton(
               onPressed: () => Get.back(),
-              child: Text('Đóng'),
+              child: const Text('Để sau'),
             ),
             ElevatedButton(
               onPressed: () {
                 Get.back();
-                Get.toNamed('/digital-otp-pin');
+                Get.toNamed('/profile');
               },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: k_blue,
-              ),
-              child: Text('Đi tới thiết lập'),
+              style: ElevatedButton.styleFrom(backgroundColor: k_blue),
+              child: const Text('Thiết lập ngay'),
             ),
           ],
         ),
       );
-      return;
+      return false;
+    } catch (e) {
+      Get.snackbar('Lỗi', 'Không thể xác thực sinh trắc học: $e');
+      return false;
     }
-    _showPinDialog.value = true;
+  }
+
+  // Digital OTP Flow - Bước 1: Kiểm tra sinh trắc học (cho giao dịch lớn) rồi yêu cầu PIN
+  Future<void> _sendOtp() async {
+    try {
+      // Check if transactions are blocked
+      final isBlocked = await _transactionBlockService.isTransactionBlocked();
+      if (isBlocked) {
+        final remainingTime = await _transactionBlockService.getRemainingBlockTime();
+        final minutes = remainingTime ~/ 60;
+        final seconds = remainingTime % 60;
+        Get.dialog(
+          AlertDialog(
+            title: Row(
+              children: [
+                Icon(Icons.lock_clock, color: Colors.red),
+                SizedBox(width: 12),
+                Text('Giao dịch bị khóa'),
+              ],
+            ),
+            content: Text(
+              'Bạn đã nhập sai PIN quá 5 lần.\n\nBạn không thể thực hiện giao dịch trong ${minutes} phút ${seconds} giây.',
+            ),
+            actions: [
+              ElevatedButton(
+                onPressed: () {
+                  Get.back();
+                  Get.offAll(() => E_WalletLayoutScreen());
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: k_blue,
+                ),
+                child: Text('Về trang chủ'),
+              ),
+            ],
+          ),
+        );
+        return;
+      }
+      
+      final amount = double.parse(_amountController.text);
+
+      // Nếu số tiền >= 20,000,000 thì yêu cầu xác thực sinh trắc học TRƯỚC KHI nhập PIN
+      if (amount >= 20000000) {
+        final bioVerified = await _verifyBiometricBeforePin();
+        if (!bioVerified) {
+          return; // Đã hiển thị thông báo lỗi trong _verifyFaceBeforePin
+        }
+      }
+
+      // Kiểm tra PIN sau khi xác thực khuôn mặt (hoặc nếu giao dịch nhỏ)
+      final hasPin = await _digitalOtpController.hasPin();
+      if (!hasPin) {
+        // Hiển thị thông báo yêu cầu tạo PIN trong Profile
+        Get.dialog(
+          AlertDialog(
+            title: Row(
+              children: [
+                Icon(Icons.security, color: k_blue),
+                SizedBox(width: 12),
+                Text('Chưa có Digital OTP PIN'),
+              ],
+            ),
+            content: Text(
+              'Bạn cần tạo mã PIN Digital OTP trong phần Hồ sơ trước khi có thể chuyển tiền.\n\nVui lòng vào Hồ sơ > Digital OTP PIN để thiết lập.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Get.back(),
+                child: Text('Đóng'),
+              ),
+              ElevatedButton(
+                onPressed: () {
+                  Get.back();
+                  Get.toNamed('/digital-otp-pin');
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: k_blue,
+                ),
+                child: Text('Đi tới thiết lập'),
+              ),
+            ],
+          ),
+        );
+        return;
+      }
+
+      _showPinDialog.value = true;
+    } catch (e) {
+      Get.snackbar('Lỗi', 'Không thể kiểm tra thông tin giao dịch: $e');
+    }
   }
 
   // Digital OTP Flow - Bước 2 (nhánh B): Tự sinh OTP và hiển thị với countdown (dùng từ lần 2 trở đi)
@@ -258,6 +424,7 @@ class _TransferMoneyScreenState extends State<TransferMoneyScreen> {
 
     try {
       final amount = double.parse(_amountController.text);
+
       bool success = false;
 
       // Tự động sử dụng OTP đã sinh thay vì gọi server
@@ -331,8 +498,11 @@ class _TransferMoneyScreenState extends State<TransferMoneyScreen> {
     if (_amountController.text.isEmpty) return false;
     final amount = double.tryParse(_amountController.text);
     if (amount == null || amount <= 0) return false;
-    final currentBalance = _walletController.userWallet.value?.balance ?? 0;
-    if (amount > currentBalance) return false;
+
+    // Remove balance check from UI - let RPC handle this with proper locking
+    // final currentBalance = _walletController.userWallet.value?.balance ?? 0;
+    // if (amount > currentBalance) return false;
+
     if (widget.isExternalRecipient) {
       // external mode: chỉ cần số tiền hợp lệ; hạn mức/số dư sẽ được check trong transferMoney()
       return true;
@@ -774,7 +944,7 @@ class _TransferMoneyScreenState extends State<TransferMoneyScreen> {
                   decoration: InputDecoration(
                     hintText: '● ● ● ● ● ●',
                     hintStyle: TextStyle(
-                      fontSize: 32,
+                      fontSize: 30,
                       letterSpacing: 20,
                       color: Colors.grey[400],
                     ),
@@ -802,17 +972,68 @@ class _TransferMoneyScreenState extends State<TransferMoneyScreen> {
                 ),
               ),
               SizedBox(height: 24),
-              TextButton(
-                onPressed: () {
-                  _showPinDialog.value = false;
-                  Get.toNamed('/digital-otp-pin');
-                  _pinController.clear();
-                },
-                child: Text(
-                  'Đặt lại mã PIN',
-                  style: TextStyle(color: Colors.brown[800]),
-                ),
-              ),
+              Obx(() {
+                if (_wrongPinAttempts.value >= 5) {
+                  return Container(
+                    padding: EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+                    decoration: BoxDecoration(
+                      color: Colors.red[50],
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.red[200]!),
+                    ),
+                    child: Column(
+                      children: [
+                        Icon(
+                          Icons.error_outline,
+                          color: Colors.red[700],
+                          size: 32,
+                        ),
+                        SizedBox(height: 8),
+                        Text(
+                          'Đã vượt quá số lần thử',
+                          style: TextStyle(
+                            color: Colors.red[800],
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                        SizedBox(height: 4),
+                        Text(
+                          'Bạn đã nhập sai PIN quá 5 lần.\nVui lòng thử lại sau 5 phút.',
+                          style: TextStyle(
+                            color: Colors.red[700],
+                            fontSize: 14,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      ],
+                    ),
+                  );
+                } else if (_wrongPinAttempts.value > 0) {
+                  return Text(
+                    'Bạn còn ${5 - _wrongPinAttempts.value} lần thử',
+                    style: TextStyle(
+                      color: Colors.orange[800],
+                      fontWeight: FontWeight.w500,
+                      fontSize: 14,
+                    ),
+                    textAlign: TextAlign.center,
+                  );
+                } else {
+                  return TextButton(
+                    onPressed: () {
+                      _showPinDialog.value = false;
+                      Get.toNamed('/digital-otp-pin');
+                      _pinController.clear();
+                    },
+                    child: Text(
+                      'Bạn có 5 lần thử',
+                      style: TextStyle(color: Colors.brown[800]),
+                    ),
+                  );
+                }
+              }),
             ],
           ),
         ),
@@ -821,15 +1042,57 @@ class _TransferMoneyScreenState extends State<TransferMoneyScreen> {
   }
 
   Future<void> _verifyPinAndShowOtp() async {
-    final ok = await _digitalOtpController.verifyPin(_pinController.text.trim());
-    if (!ok) {
-      Get.snackbar('Lỗi', 'PIN không đúng');
-      _pinController.clear();
+    final pin = _pinController.text.trim();
+    if (pin.length != 6) {
+      Get.snackbar('Lỗi', 'Vui lòng nhập đủ 6 số PIN');
       return;
     }
-    _showPinDialog.value = false;
-    _pinController.clear();
-    // Bỏ dialog OTP cá nhân, gửi OTP tự sinh luôn
-    await _createChallengeAndPromptOtp();
+
+    try {
+      final ok = await _digitalOtpController.verifyPin(pin);
+      
+      if (ok) {
+        // Reset attempt counter on successful PIN
+        _wrongPinAttempts.value = 0;
+        _showPinDialog.value = false;
+        _showOtpDialog.value = true;
+        _startOtpTimer();
+      } else {
+        // Increment wrong attempt counter
+        _wrongPinAttempts.value += 1;
+        
+        if (_wrongPinAttempts.value >= 5) {
+          // Max attempts reached
+          Get.back(); // Close pin dialog
+          
+          // Block transactions for 5 minutes
+          await _transactionBlockService.blockTransactions();
+          
+          // Reset state
+          _wrongPinAttempts.value = 0;
+          _pinController.clear();
+          _showPinDialog.value = false;
+          
+          // Navigate to failure screen
+          Get.off(() => TransferFailureScreen());
+        } else {
+          // Show remaining attempts
+          final remainingAttempts = 5 - _wrongPinAttempts.value;
+          Get.snackbar(
+            'Lỗi',
+            'PIN sai. Bạn còn $remainingAttempts lần thử.',
+            duration: const Duration(seconds: 3),
+            snackPosition: SnackPosition.TOP,
+          );
+          _pinController.clear();
+          setState(() {});
+        }
+      }
+    } catch (e) {
+      print('❌ Error verifying PIN: $e');
+      Get.snackbar('Lỗi', 'Có lỗi xảy ra khi xác thực PIN',
+        snackPosition: SnackPosition.TOP,
+      );
+    }
   }
 }

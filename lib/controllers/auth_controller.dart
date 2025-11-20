@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../services/token_service.dart';
@@ -128,6 +129,14 @@ class AuthController extends GetxController {
     isLoading.value = true;
     try {
       final supabase = Supabase.instance.client;
+      // Rate limit guard by email/IP on backend
+      await supabase.rpc('assert_login_allowed', params: {
+        'p_email': email,
+        'p_ip': null,
+        'p_max_attempts': 5,
+        'p_window_seconds': 900,
+      });
+
       final result = await supabase.auth.signInWithPassword(
         email: email,
         password: password,
@@ -140,6 +149,15 @@ class AuthController extends GetxController {
 
       // Lưu tokens vào SharedPreferences
       await _tokenService.saveTokens(session);
+      // Log success attempt
+      try {
+        await supabase.rpc('log_login_attempt', params: {
+          'p_email': email,
+          'p_user_id': user.id,
+          'p_ip': null,
+          'p_success': true,
+        });
+      } catch (_) {}
       
       await _loadProfile(user.id);
       isAuthenticated.value = true;
@@ -179,8 +197,60 @@ class AuthController extends GetxController {
       }
       
       return true;
+    } on AuthException catch (e) {
+      // Log failed attempt
+      try {
+        await Supabase.instance.client.rpc('log_login_attempt', params: {
+          'p_email': email,
+          'p_user_id': null,
+          'p_ip': null,
+          'p_success': false,
+        });
+      } catch (_) {}
+      
+      print('❌ Sign in error: ${e.message}');
+      
+      // Handle rate limit exceeded
+      if (e.message.toLowerCase().contains('rate_limit_exceeded') || 
+          e.message.toLowerCase().contains('too many login attempts')) {
+        Get.snackbar(
+          'Đăng nhập thất bại', 
+          'Bạn đã đăng nhập sai quá nhiều lần. Vui lòng thử lại sau 15 phút.',
+          duration: Duration(seconds: 5),
+          snackPosition: SnackPosition.TOP,
+          backgroundColor: Get.theme.colorScheme.errorContainer,
+          colorText: Get.theme.colorScheme.onErrorContainer,
+        );
+      } else {
+        // Other auth errors
+        Get.snackbar(
+          'Đăng nhập thất bại', 
+          'Email hoặc mật khẩu không chính xác',
+          duration: Duration(seconds: 3),
+          snackPosition: SnackPosition.TOP,
+        );
+      }
+      return false;
     } catch (e) {
       print('❌ Sign in error: $e');
+      
+      if (e.toString().contains('rate_limit_exceeded') || 
+          e.toString().contains('too many login attempts')) {
+        Get.snackbar(
+          'Đăng nhập thất bại', 
+          'Bạn đã đăng nhập sai quá nhiều lần. Vui lòng thử lại sau 15 phút.',
+          duration: Duration(seconds: 5),
+          snackPosition: SnackPosition.TOP,
+          backgroundColor: Get.theme.colorScheme.errorContainer,
+          colorText: Get.theme.colorScheme.onErrorContainer,
+        );
+      } else {
+        Get.snackbar(
+          'Lỗi', 
+          'Có lỗi xảy ra khi đăng nhập. Vui lòng thử lại sau.',
+          duration: Duration(seconds: 3),
+        );
+      }
       return false;
     } finally {
       isLoading.value = false;

@@ -80,6 +80,13 @@ class OtpController extends GetxController {
         return null;
       }
 
+      // Rate limit: ensure attempts are allowed within window
+      await Supabase.instance.client.rpc('assert_otp_verify_allowed', params: {
+        'p_user_id': currentUser!.id,
+        'p_max_attempts': 5,
+        'p_window_seconds': 300,
+      });
+
       // Verify OTP with Supabase
       final response = await Supabase.instance.client.auth.verifyOTP(
         email: currentUser.email!,
@@ -94,14 +101,36 @@ class OtpController extends GetxController {
         
         // Clear pending data
         _pendingTransferData.value = null;
+        // Log success attempt
+        try {
+          await Supabase.instance.client.rpc('log_otp_attempt', params: {
+            'p_user_id': currentUser.id,
+            'p_context': 'transfer',
+            'p_ip': null,
+            'p_success': true,
+          });
+        } catch (_) {}
         
         return data;
       } else {
         Get.snackbar('Lỗi', 'Mã OTP không đúng');
+        // Log failed attempt
+        try {
+          await Supabase.instance.client.rpc('log_otp_attempt', params: {
+            'p_user_id': currentUser.id,
+            'p_context': 'transfer',
+            'p_ip': null,
+            'p_success': false,
+          });
+        } catch (_) {}
         return null;
       }
     } catch (e) {
       print('❌ Error verifying OTP: $e');
+      if (e.toString().contains('rate_limit_exceeded')) {
+        Get.snackbar('Giới hạn', 'Bạn đã nhập OTP quá số lần cho phép. Vui lòng thử lại sau.');
+        return null;
+      }
       if (e.toString().contains('invalid_token') || e.toString().contains('token_expired')) {
         Get.snackbar('Lỗi', 'Mã OTP không đúng hoặc đã hết hạn');
       } else {
@@ -165,6 +194,13 @@ class OtpController extends GetxController {
         return false;
       }
 
+      // Rate limit: ensure attempts are allowed within window
+      await Supabase.instance.client.rpc('assert_otp_verify_allowed', params: {
+        'p_user_id': currentUser!.id,
+        'p_max_attempts': 5,
+        'p_window_seconds': 300,
+      });
+
       // Verify OTP with Supabase
       final response = await Supabase.instance.client.auth.verifyOTP(
         email: currentUser.email!,
@@ -173,13 +209,35 @@ class OtpController extends GetxController {
       );
 
       if (response.user != null) {
+        // Log success attempt
+        try {
+          await Supabase.instance.client.rpc('log_otp_attempt', params: {
+            'p_user_id': currentUser.id,
+            'p_context': 'generic',
+            'p_ip': null,
+            'p_success': true,
+          });
+        } catch (_) {}
         return true;
       } else {
         Get.snackbar('Lỗi', 'Mã OTP không đúng');
+        // Log failed attempt
+        try {
+          await Supabase.instance.client.rpc('log_otp_attempt', params: {
+            'p_user_id': currentUser.id,
+            'p_context': 'generic',
+            'p_ip': null,
+            'p_success': false,
+          });
+        } catch (_) {}
         return false;
       }
     } catch (e) {
       print('❌ Error verifying OTP: $e');
+      if (e.toString().contains('rate_limit_exceeded')) {
+        Get.snackbar('Giới hạn', 'Bạn đã nhập OTP quá số lần cho phép. Vui lòng thử lại sau.');
+        return false;
+      }
       if (e.toString().contains('invalid_token') || e.toString().contains('token_expired')) {
         Get.snackbar('Lỗi', 'Mã OTP không đúng hoặc đã hết hạn');
       } else {

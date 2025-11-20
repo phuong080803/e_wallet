@@ -210,10 +210,11 @@ class WalletController extends GetxController {
       return false;
     }
 
-    if (amount > userWallet.value!.balance) {
-      Get.snackbar('Lỗi', 'Số dư không đủ');
-      return false;
-    }
+    // Remove redundant balance check - RPC will handle this with proper locking
+    // if (amount > userWallet.value!.balance) {
+    //   Get.snackbar('Lỗi', 'Số dư không đủ');
+    //   return false;
+    // }
 
     try {
       final currentUser = Supabase.instance.client.auth.currentUser;
