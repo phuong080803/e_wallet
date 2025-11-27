@@ -1055,8 +1055,8 @@ class _TransferMoneyScreenState extends State<TransferMoneyScreen> {
         // Reset attempt counter on successful PIN
         _wrongPinAttempts.value = 0;
         _showPinDialog.value = false;
-        _showOtpDialog.value = true;
-        _startOtpTimer();
+        // Sau khi PIN đúng, sinh OTP và hiển thị dialog OTP với countdown
+        await _createChallengeAndPromptOtp();
       } else {
         // Increment wrong attempt counter
         _wrongPinAttempts.value += 1;
