@@ -75,121 +75,121 @@ class _BiometricSettingsScreenState extends State<BiometricSettingsScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   // Face Recognition Section
-                  // Container(
-                  //   width: double.infinity,
-                  //   padding: const EdgeInsets.all(16),
-                  //   decoration: BoxDecoration(
-                  //     color: Colors.blueGrey.withOpacity(0.05),
-                  //     borderRadius: BorderRadius.circular(12),
-                  //     border: Border.all(color: Colors.blueGrey.withOpacity(0.2)),
-                  //   ),
-                  //   child: Column(
-                  //     crossAxisAlignment: CrossAxisAlignment.start,
-                  //     children: [
-                  //       Row(
-                  //         children: [
-                  //           Icon(Icons.face_retouching_natural, color: k_blue),
-                  //           const SizedBox(width: 8),
-                  //           const Text('Nhận diện khuôn mặt', style: TextStyle(fontWeight: FontWeight.bold)),
-                  //         ],
-                  //       ),
-                  //       const SizedBox(height: 8),
-                  //       Text(_supported
-                  //           ? (_faceAvailable
-                  //               ? 'Thiết bị hỗ trợ nhận diện khuôn mặt.'
-                  //               : 'Thiết bị không có/không bật nhận diện khuôn mặt.')
-                  //           : 'Thiết bị không hỗ trợ sinh trắc học.'),
-                  //     ],
-                  //   ),
-                  // ),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Colors.blueGrey.withOpacity(0.05),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.blueGrey.withOpacity(0.2)),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Icon(Icons.face_retouching_natural, color: k_blue),
+                            const SizedBox(width: 8),
+                            const Text('Nhận diện khuôn mặt', style: TextStyle(fontWeight: FontWeight.bold)),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        Text(_supported
+                            ? (_faceAvailable
+                                ? 'Thiết bị hỗ trợ nhận diện khuôn mặt.'
+                                : 'Thiết bị không có/không bật nhận diện khuôn mặt.')
+                            : 'Thiết bị không hỗ trợ sinh trắc học.'),
+                      ],
+                    ),
+                  ),
 
-                  // const SizedBox(height: 20),
+                  const SizedBox(height: 20),
 
-                  // // Face Enrollment Status
-                  // if (_supported && _faceAvailable) ...[
-                  //   Container(
-                  //     width: double.infinity,
-                  //     padding: const EdgeInsets.all(16),
-                  //     decoration: BoxDecoration(
-                  //       color: _faceEnrolled ? Colors.green.shade50 : Colors.orange.shade50,
-                  //       borderRadius: BorderRadius.circular(12),
-                  //       border: Border.all(color: _faceEnrolled ? Colors.green.shade200 : Colors.orange.shade200),
-                  //     ),
-                  //     child: Column(
-                  //       crossAxisAlignment: CrossAxisAlignment.start,
-                  //       children: [
-                  //         Row(
-                  //           children: [
-                  //             Icon(
-                  //               _faceEnrolled ? Icons.verified : Icons.warning,
-                  //               color: _faceEnrolled ? Colors.green : Colors.orange,
-                  //             ),
-                  //             const SizedBox(width: 8),
-                  //             Text(
-                  //               _faceEnrolled ? 'Đã đăng ký khuôn mặt' : 'Chưa đăng ký khuôn mặt',
-                  //               style: TextStyle(
-                  //                 fontWeight: FontWeight.bold,
-                  //                 color: _faceEnrolled ? Colors.green : Colors.orange,
-                  //               ),
-                  //             ),
-                  //           ],
-                  //         ),
-                  //         if (_faceEnrolled && _enrollmentDate != null) ...[
-                  //           const SizedBox(height: 8),
-                  //           Text(
-                  //             'Ngày đăng ký: ${_formatDate(_enrollmentDate!)}',
-                  //             style: TextStyle(color: Colors.grey[700], fontSize: 12),
-                  //           ),
-                  //         ],
-                  //         if (!_faceEnrolled) ...[
-                  //           const SizedBox(height: 8),
-                  //           Text(
-                  //             'Để sử dụng xác thực khuôn mặt, bạn cần đăng ký khuôn mặt trước.',
-                  //             style: TextStyle(color: Colors.grey[700], fontSize: 12),
-                  //           ),
-                  //         ],
-                  //       ],
-                  //     ),
-                  //   ),
+                  // Face Enrollment Status
+                  if (_supported && _faceAvailable) ...[
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: _faceEnrolled ? Colors.green.shade50 : Colors.orange.shade50,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: _faceEnrolled ? Colors.green.shade200 : Colors.orange.shade200),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Icon(
+                                _faceEnrolled ? Icons.verified : Icons.warning,
+                                color: _faceEnrolled ? Colors.green : Colors.orange,
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                _faceEnrolled ? 'Đã đăng ký khuôn mặt' : 'Chưa đăng ký khuôn mặt',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  color: _faceEnrolled ? Colors.green : Colors.orange,
+                                ),
+                              ),
+                            ],
+                          ),
+                          if (_faceEnrolled && _enrollmentDate != null) ...[
+                            const SizedBox(height: 8),
+                            Text(
+                              'Ngày đăng ký: ${_formatDate(_enrollmentDate!)}',
+                              style: TextStyle(color: Colors.grey[700], fontSize: 12),
+                            ),
+                          ],
+                          if (!_faceEnrolled) ...[
+                            const SizedBox(height: 8),
+                            Text(
+                              'Để sử dụng xác thực khuôn mặt, bạn cần đăng ký khuôn mặt trước.',
+                              style: TextStyle(color: Colors.grey[700], fontSize: 12),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
 
-                  //   const SizedBox(height: 16),
+                    const SizedBox(height: 16),
 
-                  //   // Face Enrollment Button
-                  //   SizedBox(
-                  //     width: double.infinity,
-                  //     child: ElevatedButton.icon(
-                  //       onPressed: _faceEnrolled ? null : () => _enrollFace(),
-                  //       icon: Icon(_faceEnrolled ? Icons.verified : Icons.face_retouching_natural),
-                  //       label: Text(_faceEnrolled ? 'Đã đăng ký' : 'Đăng ký khuôn mặt'),
-                  //       style: ElevatedButton.styleFrom(
-                  //         backgroundColor: _faceEnrolled ? Colors.grey : k_blue,
-                  //         foregroundColor: Colors.white,
-                  //         padding: const EdgeInsets.symmetric(vertical: 12),
-                  //         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  //       ),
-                  //     ),
-                  //   ),
+                    // Face Enrollment Button
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton.icon(
+                        onPressed: _faceEnrolled ? null : () => _enrollFace(),
+                        icon: Icon(_faceEnrolled ? Icons.verified : Icons.face_retouching_natural),
+                        label: Text(_faceEnrolled ? 'Đã đăng ký' : 'Đăng ký khuôn mặt'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: _faceEnrolled ? Colors.grey : k_blue,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
+                      ),
+                    ),
 
-                  //   if (_faceEnrolled) ...[
-                  //     const SizedBox(height: 8),
-                  //     SizedBox(
-                  //       width: double.infinity,
-                  //       child: OutlinedButton.icon(
-                  //         onPressed: () => _unenrollFace(),
-                  //         icon: const Icon(Icons.delete_outline),
-                  //         label: const Text('Hủy đăng ký'),
-                  //         style: OutlinedButton.styleFrom(
-                  //           foregroundColor: Colors.red,
-                  //           side: const BorderSide(color: Colors.red),
-                  //           padding: const EdgeInsets.symmetric(vertical: 12),
-                  //           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  //         ),
-                  //       ),
-                  //     ),
-                  //   ],
+                    if (_faceEnrolled) ...[
+                      const SizedBox(height: 8),
+                      SizedBox(
+                        width: double.infinity,
+                        child: OutlinedButton.icon(
+                          onPressed: () => _unenrollFace(),
+                          icon: const Icon(Icons.delete_outline),
+                          label: const Text('Hủy đăng ký'),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: Colors.red,
+                            side: const BorderSide(color: Colors.red),
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          ),
+                        ),
+                      ),
+                    ],
 
-                  //   const SizedBox(height: 20),
-                  // ],
+                    const SizedBox(height: 20),
+                  ],
 
                   // Fingerprint Recognition Section
                   if (_supported && _fpAvailable) ...[
@@ -271,8 +271,8 @@ class _BiometricSettingsScreenState extends State<BiometricSettingsScreen> {
                     const SizedBox(height: 20),
                   ],
 
-                  // Biometric Toggle
-                  if (_supported && (_faceAvailable || _fpAvailable) && (_faceEnrolled || _fpEnrolled))
+                  // Biometric Toggle (dựa trên khả dụng hệ thống, không phụ thuộc đăng ký nội bộ)
+                  if (_supported && (_faceAvailable || _fpAvailable))
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                       decoration: BoxDecoration(
@@ -306,59 +306,59 @@ class _BiometricSettingsScreenState extends State<BiometricSettingsScreen> {
 
                   const SizedBox(height: 12),
 
-                  // Preferred Method Selection
-                  // if (_faceEnrolled && _fpEnrolled)
-                  //   Container(
-                  //     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  //     decoration: BoxDecoration(
-                  //       borderRadius: BorderRadius.circular(12),
-                  //       border: Border.all(color: Colors.grey.shade300),
-                  //     ),
-                  //     child: Column(
-                  //       crossAxisAlignment: CrossAxisAlignment.start,
-                  //       children: [
-                  //         const Text('Phương thức xác thực mặc định', style: TextStyle(fontWeight: FontWeight.bold)),
-                  //         const SizedBox(height: 12),
-                  //         Row(
-                  //           children: [
-                  //             Flexible(
-                  //               child: Row(
-                  //                 children: [
-                  //                   Radio(
-                  //                     value: 'face',
-                  //                     groupValue: _preferred,
-                  //                     onChanged: (val) async {
-                  //                       setState(() => _preferred = val as String);
-                  //                       await _biometric.setPreferredMethod(val as String);
-                  //                     },
-                  //                   ),
-                  //                   const Text('Khuôn mặt'),
-                  //                 ],
-                  //               ),
-                  //             ),
-                  //             const SizedBox(width: 16),
-                  //             Flexible(
-                  //               child: Row(
-                  //                 children: [
-                  //                   Radio(
-                  //                     value: 'fingerprint',
-                  //                     groupValue: _preferred,
-                  //                     onChanged: (val) async {
-                  //                       setState(() => _preferred = val as String);
-                  //                       await _biometric.setPreferredMethod(val as String);
-                  //                     },
-                  //                   ),
-                  //                   const Text('Vân tay'),
-                  //                 ],
-                  //               ),
-                  //             ),
-                  //           ],
-                  //         ),
-                  //       ],
-                  //     ),
-                  //   ),
+                  // Preferred Method Selection (hiển thị khi cả hai phương thức đều khả dụng trên hệ thống)
+                  if (_faceAvailable && _fpAvailable)
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: Colors.grey.shade300),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text('Phương thức xác thực mặc định', style: TextStyle(fontWeight: FontWeight.bold)),
+                          const SizedBox(height: 12),
+                          Row(
+                            children: [
+                              Flexible(
+                                child: Row(
+                                  children: [
+                                    Radio(
+                                      value: 'face',
+                                      groupValue: _preferred,
+                                      onChanged: (val) async {
+                                        setState(() => _preferred = val as String);
+                                        await _biometric.setPreferredMethod(val as String);
+                                      },
+                                    ),
+                                    const Text('Khuôn mặt'),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(width: 16),
+                              Flexible(
+                                child: Row(
+                                  children: [
+                                    Radio(
+                                      value: 'fingerprint',
+                                      groupValue: _preferred,
+                                      onChanged: (val) async {
+                                        setState(() => _preferred = val as String);
+                                        await _biometric.setPreferredMethod(val as String);
+                                      },
+                                    ),
+                                    const Text('Vân tay'),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
 
-                  // const SizedBox(height: 12),
+                  const SizedBox(height: 12),
 
                   // Information Section
                   Container(

@@ -209,48 +209,9 @@ class AuthController extends GetxController {
       } catch (_) {}
       
       print('❌ Sign in error: ${e.message}');
-      
-      // Handle rate limit exceeded
-      if (e.message.toLowerCase().contains('rate_limit_exceeded') || 
-          e.message.toLowerCase().contains('too many login attempts')) {
-        Get.snackbar(
-          'Đăng nhập thất bại', 
-          'Bạn đã đăng nhập sai quá nhiều lần. Vui lòng thử lại sau 15 phút.',
-          duration: Duration(seconds: 5),
-          snackPosition: SnackPosition.TOP,
-          backgroundColor: Get.theme.colorScheme.errorContainer,
-          colorText: Get.theme.colorScheme.onErrorContainer,
-        );
-      } else {
-        // Other auth errors
-        Get.snackbar(
-          'Đăng nhập thất bại', 
-          'Email hoặc mật khẩu không chính xác',
-          duration: Duration(seconds: 3),
-          snackPosition: SnackPosition.TOP,
-        );
-      }
       return false;
     } catch (e) {
       print('❌ Sign in error: $e');
-      
-      if (e.toString().contains('rate_limit_exceeded') || 
-          e.toString().contains('too many login attempts')) {
-        Get.snackbar(
-          'Đăng nhập thất bại', 
-          'Bạn đã đăng nhập sai quá nhiều lần. Vui lòng thử lại sau 15 phút.',
-          duration: Duration(seconds: 5),
-          snackPosition: SnackPosition.TOP,
-          backgroundColor: Get.theme.colorScheme.errorContainer,
-          colorText: Get.theme.colorScheme.onErrorContainer,
-        );
-      } else {
-        Get.snackbar(
-          'Lỗi', 
-          'Có lỗi xảy ra khi đăng nhập. Vui lòng thử lại sau.',
-          duration: Duration(seconds: 3),
-        );
-      }
       return false;
     } finally {
       isLoading.value = false;

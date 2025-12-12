@@ -26,18 +26,47 @@ class _LoginScreenState extends State<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
 
   bool _anMatKhau = true;
+  int _failedLoginAttempts = 0;
+  DateTime? _lockUntil;
+  String? _passwordError;
 
   void _onLogin() async {
-    if (_formKey.currentState!.validate()) {
-      final success = await _authController.signIn(
-        email: _emailController.text.trim(),
-        password: _passwordController.text.trim(),
-      );
-      
-      if (!success) {
-        Get.snackbar('Lỗi', 'Email hoặc mật khẩu không đúng');
-      }
-      // Navigation is now handled directly in AuthController
+    if (!_formKey.currentState!.validate()) {
+      return;
+    }
+
+    // Kiểm tra nếu đang bị khóa do nhập sai quá số lần cho phép
+    if (_lockUntil != null && DateTime.now().isBefore(_lockUntil!)) {
+      setState(() {
+        _passwordError =
+            'Bạn đã nhập sai quá 5 lần liên tiếp, hãy thử lại sau 10 phút';
+      });
+      return;
+    }
+
+    final success = await _authController.signIn(
+      email: _emailController.text.trim(),
+      password: _passwordController.text.trim(),
+    );
+
+    if (!success) {
+      setState(() {
+        _failedLoginAttempts++;
+        if (_failedLoginAttempts >= 5) {
+          _lockUntil = DateTime.now().add(const Duration(minutes: 10));
+          _passwordError =
+              'Bạn đã nhập sai quá 5 lần liên tiếp, hãy thử lại sau 10 phút';
+        } else {
+          _passwordError = 'Sai mật khẩu';
+        }
+      });
+    } else {
+      // Đăng nhập thành công: reset lại trạng thái lỗi và bộ đếm
+      setState(() {
+        _failedLoginAttempts = 0;
+        _lockUntil = null;
+        _passwordError = null;
+      });
     }
   }
 
@@ -206,6 +235,13 @@ class _LoginScreenState extends State<LoginScreen> {
                                 }
                                 return null;
                               },
+                              onChanged: (value) {
+                                if (_passwordError != null) {
+                                  setState(() {
+                                    _passwordError = null;
+                                  });
+                                }
+                              },
                               decoration: InputDecoration(
                                 hintText: "Nhập mật khẩu của bạn",
                                 hintStyle: TextStyle(color: k_fontGrey),
@@ -226,6 +262,17 @@ class _LoginScreenState extends State<LoginScreen> {
                               ),
                             ),
                           ),
+                          if (_passwordError != null) ...[
+                            const SizedBox(height: 6),
+                            Text(
+                              _passwordError!,
+                              style: const TextStyle(
+                                color: Colors.red,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ],
                           
                           const SizedBox(height: 12),
                           

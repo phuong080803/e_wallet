@@ -204,10 +204,8 @@ class _TransferMoneyScreenState extends State<TransferMoneyScreen> {
         return false;
       }
 
-      final metadata = user.userMetadata ?? {};
-      // Determine preferred method
+      // Determine preferred method (fingerprint/face)
       final preferred = await _biometric.getPreferredMethod();
-      final faceEnrolled = metadata['face_embedding'] != null;
 
       // If preferred is fingerprint -> authenticate fingerprint directly
       if (preferred == 'fingerprint') {
@@ -225,12 +223,15 @@ class _TransferMoneyScreenState extends State<TransferMoneyScreen> {
         }
       }
 
-      // Fallback to face if available/enrolled
-      if (faceEnrolled) {
-        final faceVerified = await Get.dialog<bool>(const FaceVerificationDialog());
-        if (faceVerified == true) return true;
-        Get.snackbar('Từ chối', 'Xác thực khuôn mặt thất bại. Giao dịch bị hủy.');
-        return false;
+      // Face via built-in device biometrics
+      final faceAvailable = await _biometric.isFaceAvailable();
+      if (faceAvailable) {
+        final ok = await _biometric.authenticateFace();
+        if (!ok) {
+          Get.snackbar('Từ chối', 'Xác thực khuôn mặt thất bại. Giao dịch bị hủy.');
+          return false;
+        }
+        return true;
       }
 
       // If neither available, prompt to enroll

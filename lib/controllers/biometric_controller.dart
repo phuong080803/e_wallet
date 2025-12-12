@@ -162,6 +162,19 @@ class BiometricController extends GetxController {
     }
   }
 
+  Future<bool> authenticateFace() async {
+    try {
+      final available = await isFaceAvailable();
+      if (!available) return false;
+      return await _auth.authenticate(
+        localizedReason: 'Xác thực khuôn mặt để tiếp tục',
+        options: const AuthenticationOptions(biometricOnly: true, stickyAuth: true),
+      );
+    } catch (_) {
+      return false;
+    }
+  }
+
   Future<String> getPreferredMethod() async {
     try {
       final user = _supabase.auth.currentUser;
